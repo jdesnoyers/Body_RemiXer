@@ -431,7 +431,7 @@ public class KinectBodyTracking : MonoBehaviour
             if (zeroQuaternion.Equals(orientJoints[jt]) && filteredTargetJointPos.HasValue)
             {
                 Vector3 direction = filteredJointPos - filteredTargetJointPos.Value;
-                
+
                 if (jt == Kinect.JointType.AnkleLeft || jt == Kinect.JointType.AnkleRight) //the ankle roations have to be pointed at the foot to match the mesh
                 {
                     if(jt == Kinect.JointType.AnkleLeft)
@@ -445,11 +445,11 @@ public class KinectBodyTracking : MonoBehaviour
 
                     }
                     Vector3 perpendicular = Vector3.Cross(direction, Vector3.up);
-                    Vector3 normal = Vector3.Cross(perpendicular, direction);
+                    Vector3 normal = Vector3.Cross(direction, perpendicular);
 
                     if (normal.sqrMagnitude != 0 && direction.sqrMagnitude != 0)
                     {
-                        orientJoints[jt] = Quaternion.LookRotation(normal, direction);
+                        orientJoints[jt] = Quaternion.LookRotation(normal, direction); //normal, direction
 
                     }
                     else
@@ -457,7 +457,8 @@ public class KinectBodyTracking : MonoBehaviour
                         orientJoints[jt] = Quaternion.identity;
                     }
                 }
-                else if(jt == Kinect.JointType.ThumbLeft || jt == Kinect.JointType.ThumbRight) //the thumbs are along their parents forward vector so they are calculated
+                //else 
+                if (jt == Kinect.JointType.ThumbLeft || jt == Kinect.JointType.ThumbRight) //the thumbs are along their parents forward vector so they are calculated
                 {
 
                     Vector3 perpendicular = Vector3.Cross(direction, Vector3.up);
@@ -643,7 +644,7 @@ public class KinectBodyTracking : MonoBehaviour
         {
             string findJoint = neoJointNames[i];
 
-            if(kinectJoints.ContainsKey(findJoint))
+            if (kinectJoints.ContainsKey(findJoint))
             {
                 //neoTransform = joints[i].transform;
                 kinectTransform = kinectJoints[findJoint].transform;
@@ -658,7 +659,23 @@ public class KinectBodyTracking : MonoBehaviour
                         convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * kinectTransform.rotation;
 
                     }
-                    else if ((i > 6 && i < 11) || (i > 17 && i < 22)) //rotations for joints 7-10 and 18-21 are inverted in the model
+                    else if (i == 3 || i == 4 || i == 5 || i == 6) //rotations for left leg (except ankle)
+                    {
+                        convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.forward) * kinectTransform.rotation;
+                    }
+                    /*else if (i == 5) //rotation for left ankle
+                    {
+                        convertedRotation = kinectTransform.rotation;
+                    }*/
+                    else if (i == 7 || i == 8 || i == 9 || i == 10) //rotations for right leg (except ankle)
+                    {
+                        convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * Quaternion.AngleAxis(90, kinectTransform.forward) * kinectTransform.rotation;
+                    }
+                    /*else if (i == 9)
+                    {
+                        convertedRotation = Quaternion.AngleAxis(180, kinectTransform.right) * kinectTransform.rotation;
+                    }*/
+                    else if (i > 17 && i < 22) //rotations for 18-21 are inverted in the model
                     {
                         convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.right) * Quaternion.AngleAxis(-90, kinectTransform.up) * kinectTransform.rotation;
 
@@ -677,7 +694,8 @@ public class KinectBodyTracking : MonoBehaviour
                 {
                     joints[i].transform.rotation = joints[i].transform.parent.transform.rotation;
                 }
-                    
+                 
+                joints[i].transform.position = kinectTransform.position;   
 
 
             }
