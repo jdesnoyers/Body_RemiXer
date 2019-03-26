@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Kinect = Windows.Kinect;
+using System;
+using UnityEngine.Experimental.Rendering.HDPipeline;
 
 /* John Desnoyers-Stewart
  * 2018-04-05
@@ -20,6 +22,9 @@ public class ReflectionTracker : MonoBehaviour
     public float projectionWidth = 1.7778f; //width of the projection - can be scaled to make the projection larger than life
     public float cameraZoom = 1.0f;         //camera zoom changes how far the camera is from the reflection plane to flatten the scale of objects in the room, or exaggerate proportions of objects which are closer and farther
 
+    //variables for possible lighting fix in HDRP
+    private HDAdditionalCameraData data;
+    private HDAdditionalCameraData.NonObliqueProjectionGetter proj;
 
     private Matrix4x4 reflectionMat;
 
@@ -39,15 +44,21 @@ public class ReflectionTracker : MonoBehaviour
         }
 
         mirrorCamera = cameraObject.GetComponent<Camera>();
+
+
+        //need to fix to get lighting to work in reflected matrix
+        data = cameraObject.GetComponent<HDAdditionalCameraData>();
+        proj = new HDAdditionalCameraData.NonObliqueProjectionGetter(FromCamera);
+        
     }
+
 
     //Late update called after update so that bodies have been filtered
     void LateUpdate()
     {
 
         Vector3 headPosition = new Vector3();
-
-
+        
         if (bodyTracker.GetNumBodies() > 0)
         {
 
@@ -97,6 +108,11 @@ public class ReflectionTracker : MonoBehaviour
         //sets the projection matrix based on the location of the projection
         Matrix4x4 m = PerspectiveOffCenter(left, right, bottom, top, mirrorCamera.nearClipPlane, mirrorCamera.farClipPlane);
         mirrorCamera.projectionMatrix = m;
+
+
+        //Beginning of fix for lighting in HDRP (not sure how to use)
+        FromCamera(mirrorCamera);
+        data.GetNonObliqueProjection(mirrorCamera);
     }
 
     public void CalculateReflectionMatrix(ref Matrix4x4 reflectionMat, Vector4 normal)
@@ -122,11 +138,15 @@ public class ReflectionTracker : MonoBehaviour
         reflectionMat.m33 = 1.0f;
     }
 
+    //Beginning of fix for lighting in HDRP
+    public Matrix4x4 FromCamera(Camera camera)
+    {
+        return camera.projectionMatrix;
+    }
+
     /* From Unity Camera Projection Matrix sample 
      * https://docs.unity3d.com/ScriptReference/Camera-projectionMatrix.html
      */
-
-
 
 
     static Matrix4x4 PerspectiveOffCenter(float left, float right, float bottom, float top, float near, float far)

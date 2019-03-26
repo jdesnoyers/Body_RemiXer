@@ -7,7 +7,7 @@ using UnityEngine.Events;
 
 public class AnimatorIkEvent : MonoBehaviour {
     
-    public KinectBodyTracking bodyTracker;
+    public BodyRemixerController bodyTracker;
 
     UnityEvent animatorIK;
     
@@ -18,7 +18,7 @@ public class AnimatorIkEvent : MonoBehaviour {
         }
         if(bodyTracker == null)
         {
-            bodyTracker = GameObject.Find("Kinect Space/Body Track").GetComponent<KinectBodyTracking>();
+            bodyTracker = GameObject.Find("Kinect Space/Body Track").GetComponent<BodyRemixerController>();
         }
 
         animatorIK.AddListener(bodyTracker.ikAction);
