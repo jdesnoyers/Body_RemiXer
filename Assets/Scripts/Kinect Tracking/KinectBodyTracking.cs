@@ -73,7 +73,7 @@ public class KinectBodyTracking : MonoBehaviour
     private Floor floor;
 
     public delegate void DelegateFunction();
-    public DelegateFunction createDelegateBodies;
+    public DelegateFunction DelegateBodies;
     
 
     //dictionary to access connected joints
@@ -265,7 +265,7 @@ public class KinectBodyTracking : MonoBehaviour
             }
         }
 
-        createDelegateBodies();
+        DelegateBodies();
     }
 
     //set up the body game object in Unity
