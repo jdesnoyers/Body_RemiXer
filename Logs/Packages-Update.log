@@ -81,3 +81,11 @@ The following packages were removed:
   com.unity.visualeffectgraph@4.10.0-preview
   com.unity.xr.legacyinputhelpers@2.0.2
   com.unity.xr.openvr.standalone@1.0.3
+
+=== Tue Apr  9 12:09:41 2019
+
+Packages were changed.
+Update Mode: updateDependencies
+
+The following packages were updated:
+  com.unity.multiplayer-hlapi from version 1.0.1 to 1.0.2

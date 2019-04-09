@@ -32,16 +32,27 @@ public class Math3D : MonoBehaviour
             newRotation = InverseSignQuaternion(newRotation);
         }
 
-        //Average the values
-        float addDet = 1f / (float)addAmount;
-        cumulative.w += newRotation.w;
-        w = cumulative.w * addDet;
-        cumulative.x += newRotation.x;
-        x = cumulative.x * addDet;
-        cumulative.y += newRotation.y;
-        y = cumulative.y * addDet;
-        cumulative.z += newRotation.z;
-        z = cumulative.z * addDet;
+        if(AreQuaternionsClose(firstRotation, newRotation)) //added to help with stability
+        {
+            //Average the values
+            float addDet = 1f / (float)addAmount;
+            cumulative.w += newRotation.w;
+            w = cumulative.w * addDet;
+            cumulative.x += newRotation.x;
+            x = cumulative.x * addDet;
+            cumulative.y += newRotation.y;
+            y = cumulative.y * addDet;
+            cumulative.z += newRotation.z;
+            z = cumulative.z * addDet;
+
+        }
+        else
+        {
+            w = cumulative.w;
+            x = cumulative.x;
+            y = cumulative.y;
+            z = cumulative.z;
+        }
 
         //note: if speed is an issue, you can skip the normalization step
         return NormalizeQuaternion(x, y, z, w);

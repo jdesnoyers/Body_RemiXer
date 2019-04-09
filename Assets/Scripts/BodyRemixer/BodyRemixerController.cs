@@ -459,7 +459,7 @@ public class BodyRemixerController : MonoBehaviour
         {
             return null;
         }
-        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity, GetComponent<Transform>());
+        GameObject body = Instantiate(BodyPrefab, GetComponent<Transform>());
         body.name = "ThirdShiva" + id;
 
         shivaThirdJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
@@ -474,7 +474,7 @@ public class BodyRemixerController : MonoBehaviour
         {
             return null;
         }
-        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity, GetComponent<Transform>());
+        GameObject body = Instantiate(BodyPrefab, GetComponent<Transform>());
         body.name = "ThirdPerson";
 
         _thirdPersonJointMap = body.GetComponent<JointCollection>().jointArray; //copy array of game objects from prefab
@@ -563,33 +563,65 @@ public class BodyRemixerController : MonoBehaviour
         for (int i = 0; i < joints.Length; i++)
         {
             Quaternion rotationAverage = Quaternion.identity;
-            Vector4 quaternionCumulator = new Vector4();
+            Vector4 quaternionCumulator = new Vector4(0,0,0,0);
             int n = 0;
 
             for (int j = 0; j < knownMeshIds.Count; j++)
             {
-                if (meshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
+                //Change to compare to previous average to help with stability
+                //average position and rotation for body
+                if(i < 22)
                 {
-                    n++;
-                    positionAverager[i] += meshJointMap[knownMeshIds[j]][i].transform.localPosition;
-                    rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, meshJointMap[knownMeshIds[j]][i].transform.localRotation, meshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
+                    if (meshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
+                    {
+                        n++;
+                        positionAverager[i] += meshJointMap[knownMeshIds[j]][i].transform.localPosition;
+                        rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, meshJointMap[knownMeshIds[j]][i].transform.localRotation, meshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
+                    }
+                }
+                else //for head
+                {
+                    if (meshJointMap[knownMeshIds[j]][i].transform.localScale != Vector3.forward)
+                    {
+                        n++;
+                        positionAverager[i] += meshJointMap[knownMeshIds[j]][i].transform.localPosition;
+                        rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, meshJointMap[knownMeshIds[j]][i].transform.localRotation, meshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
+                    }
+
                 }
             }
+
+            //check if we successfully found any tracked joints - if not set this joint's scale to "flat"
             if (n == 0)
             {
-                joints[i].transform.localScale = flatScale;
+                if (i < 22)
+                {
+                    joints[i].transform.localScale = flatScale;
+                }
+                else
+                {
+                    joints[i].transform.localScale = Vector3.forward; //if its the head zero out y too
+                }
             }
             else
             {
-                if (i == 0)
+                if (i < 3) //set spine base 
                 {
                     joints[i].transform.localPosition = new Vector3(joints[i].transform.localPosition.x, positionAverager[i].y / knownMeshIds.Count, joints[i].transform.localPosition.z);
+                }
+                else if (i > 10 && i < 14) //skip spine for now to avoid issues with averaging quaternions
+                {
+                    joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
                 }
                 else
                 {
                     joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
-                    joints[i].transform.localRotation = rotationAverage;
+                    if(!(float.IsNaN(rotationAverage.w) || float.IsNaN(rotationAverage.x) || float.IsNaN(rotationAverage.y) || float.IsNaN(rotationAverage.z)))
+                    {
+                        joints[i].transform.localRotation = rotationAverage;
+                    }
                 }
+
                 joints[i].transform.localScale = Vector3.one;
             }
         }

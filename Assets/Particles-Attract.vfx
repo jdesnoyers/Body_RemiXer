@@ -690,21 +690,21 @@ VisualEffectResource:
       width * height;\n    uint id = FIXED_RAND(Seed) * count;\n    uint y = id /
       width;\n    uint x = id - y * width;\n    float3 value = (float3)attributeMap.t.Load(int3(x,
       y, 0));\n    value = (value  + valueBias) * valueScale;\n    targetPosition
-      = value;\n}\nvoid Force_1(inout float3 velocity, float mass, float3 Velocity,
-      float Drag, float deltaTime) /*Mode:Relative */\n{\n    velocity += (Velocity
-      - velocity) * min(1.0f,Drag * deltaTime / mass);\n}\nvoid EulerIntegration(inout
-      float3 position, float3 velocity, float deltaTime)\n{\n    position += velocity
-      * deltaTime;\n}\nvoid Age(inout float age, float deltaTime)\n{\n    age += deltaTime;\n}\nvoid
-      Reap(float age, float lifetime, inout bool alive)\n{\n    if(age > lifetime)
-      { alive = false; }\n}\n\n\n\n[numthreads(NB_THREADS_PER_GROUP,1,1)]\nvoid CSMain(uint3
-      groupId          : SV_GroupID,\n            uint3 groupThreadId    : SV_GroupThreadID)\n{\n\tuint
-      id = groupThreadId.x + groupId.x * NB_THREADS_PER_GROUP + groupId.y * dispatchWidth
-      * NB_THREADS_PER_GROUP;\n\tuint index = id;\n\tif (id < nbMax)\n\t{\n#if VFX_USE_ALIVE_CURRENT\n\t\tbool
-      alive = (attributeBuffer.Load((index * 0x8 + 0x3) << 2));\n\t\t\n\n\t\tif (alive)\n\t\t{\n\t\t\tfloat3
-      position = asfloat(attributeBuffer.Load3((index * 0x8 + 0x0) << 2));\n\t\t\tuint
-      particleId = (attributeBuffer.Load((index * 0x1 + 0xC3600) << 2));\n\t\t\tfloat3
-      velocity = asfloat(attributeBuffer.Load3((index * 0x8 + 0x4) << 2));\n\t\t\tfloat
-      lifetime = asfloat(attributeBuffer.Load((index * 0x1 + 0xDBCC0) << 2));\n\t\t\tfloat
+      = value;\n}\nvoid Force_0(inout float3 velocity, float mass, float3 Force, float
+      deltaTime) /*Mode:Absolute */\n{\n    velocity += (Force / mass) * deltaTime;\n}\nvoid
+      EulerIntegration(inout float3 position, float3 velocity, float deltaTime)\n{\n
+      \   position += velocity * deltaTime;\n}\nvoid Age(inout float age, float deltaTime)\n{\n
+      \   age += deltaTime;\n}\nvoid Reap(float age, float lifetime, inout bool alive)\n{\n
+      \   if(age > lifetime) { alive = false; }\n}\n\n\n\n[numthreads(NB_THREADS_PER_GROUP,1,1)]\nvoid
+      CSMain(uint3 groupId          : SV_GroupID,\n            uint3 groupThreadId
+      \   : SV_GroupThreadID)\n{\n\tuint id = groupThreadId.x + groupId.x * NB_THREADS_PER_GROUP
+      + groupId.y * dispatchWidth * NB_THREADS_PER_GROUP;\n\tuint index = id;\n\tif
+      (id < nbMax)\n\t{\n#if VFX_USE_ALIVE_CURRENT\n\t\tbool alive = (attributeBuffer.Load((index
+      * 0x8 + 0x3) << 2));\n\t\t\n\n\t\tif (alive)\n\t\t{\n\t\t\tfloat3 position =
+      asfloat(attributeBuffer.Load3((index * 0x8 + 0x0) << 2));\n\t\t\tuint particleId
+      = (attributeBuffer.Load((index * 0x1 + 0xC3600) << 2));\n\t\t\tfloat3 velocity
+      = asfloat(attributeBuffer.Load3((index * 0x8 + 0x4) << 2));\n\t\t\tfloat lifetime
+      = asfloat(attributeBuffer.Load((index * 0x1 + 0xDBCC0) << 2));\n\t\t\tfloat
       mass = (float)1;\n\t\t\tfloat3 targetPosition = asfloat(attributeBuffer.Load3((index
       * 0x4 + 0xF4380) << 2));\n\t\t\tfloat age = asfloat(attributeBuffer.Load((index
       * 0x8 + 0x7) << 2));\n\t\t\t\n\n\t\t\t\n#if VFX_USE_OLDPOSITION_CURRENT\n\t\t\toldPosition
@@ -715,7 +715,7 @@ VisualEffectResource:
       /*inout */targetPosition, particleId, GetVFXSampler(attributeMap_c, samplerattributeMap_c),
       (uint)0, float3(0,0,0), float3(1,1,1));\n\t\t\t}\n\t\t\t{\n\t\t\t    float3
       tmp_bc = targetPosition - position;\n\t\t\t    float3 tmp_be = tmp_bc * float3(1.5,1.5,1.5);\n\t\t\t
-      \   Force_1( /*inout */velocity, mass, tmp_be, (float)1, deltaTime_a);\n\t\t\t}\n\t\t\tEulerIntegration(
+      \   Force_0( /*inout */velocity, mass, tmp_be, deltaTime_a);\n\t\t\t}\n\t\t\tEulerIntegration(
       /*inout */position, velocity, deltaTime_a);\n\t\t\tAge( /*inout */age, deltaTime_a);\n\t\t\tReap(age,
       lifetime,  /*inout */alive);\n\t\t\t\n\n\t\t\tif (alive)\n\t\t\t{\n\t\t\t\tattributeBuffer.Store3((index
       * 0x8 + 0x0) << 2,asuint(position));\n\t\t\t\tattributeBuffer.Store3((index
@@ -740,7 +740,7 @@ VisualEffectResource:
       /*inout */targetPosition, particleId, GetVFXSampler(attributeMap_c, samplerattributeMap_c),
       (uint)0, float3(0,0,0), float3(1,1,1));\n\t\t}\n\t\t{\n\t\t    float3 tmp_bc
       = targetPosition - position;\n\t\t    float3 tmp_be = tmp_bc * float3(1.5,1.5,1.5);\n\t\t
-      \   Force_1( /*inout */velocity, mass, tmp_be, (float)1, deltaTime_a);\n\t\t}\n\t\tEulerIntegration(
+      \   Force_0( /*inout */velocity, mass, tmp_be, deltaTime_a);\n\t\t}\n\t\tEulerIntegration(
       /*inout */position, velocity, deltaTime_a);\n\t\tAge( /*inout */age, deltaTime_a);\n\t\tReap(age,
       lifetime,  /*inout */alive);\n\t\t\n\n\t\tattributeBuffer.Store3((index * 0x8
       + 0x0) << 2,asuint(position));\n\t\tattributeBuffer.Store3((index * 0x8 + 0x4)
@@ -7004,7 +7004,7 @@ MonoBehaviour:
     attributes: []
   m_Direction: 1
   m_LinkedSlots:
-  - {fileID: 8926484042661614847}
+  - {fileID: 8926484042661614854}
 --- !u!114 &8926484042661614796
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7123,7 +7123,7 @@ MonoBehaviour:
   m_UISuperCollapsed: 0
   m_InputSlots:
   - {fileID: 8926484042661614800}
-  - {fileID: 8926484042661614841}
+  - {fileID: 8926484042661614859}
   - {fileID: 8926484042661614802}
   - {fileID: 8926484042661614806}
   m_OutputSlots: []
@@ -7474,52 +7474,11 @@ MonoBehaviour:
   m_UICollapsed: 0
   m_UISuperCollapsed: 0
   m_InputSlots:
-  - {fileID: 8926484042661614847}
-  - {fileID: 8926484042661614852}
+  - {fileID: 8926484042661614854}
   m_OutputSlots: []
   m_Disabled: 0
-  Mode: 1
---- !u!114 &8926484042661614841
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c52d920e7fff73b498050a6b3c4404ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Parent: {fileID: 0}
-  m_Children: []
-  m_UIPosition: {x: 0, y: 0}
-  m_UICollapsed: 1
-  m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614841}
-  m_MasterData:
-    m_Owner: {fileID: 8926484042661614799}
-    m_Value:
-      m_Type:
-        m_SerializableType: System.UInt32, mscorlib, Version=4.0.0.0, Culture=neutral,
-          PublicKeyToken=b77a5c561934e089
-      m_SerializableObject: 0
-    m_Space: 2147483647
-  m_Property:
-    name: Seed
-    m_serializedType:
-      m_SerializableType: System.UInt32, mscorlib, Version=4.0.0.0, Culture=neutral,
-        PublicKeyToken=b77a5c561934e089
-    attributes:
-    - m_Type: 3
-      m_Min: -Infinity
-      m_Max: Infinity
-      m_Tooltip: Seed to compute the constant random
-      m_Regex: 
-      m_RegexMaxLength: 0
-  m_Direction: 0
-  m_LinkedSlots: []
---- !u!114 &8926484042661614847
+  Mode: 0
+--- !u!114 &8926484042661614854
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7533,11 +7492,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Parent: {fileID: 0}
   m_Children:
-  - {fileID: 8926484042661614848}
+  - {fileID: 8926484042661614855}
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614847}
+  m_MasterSlot: {fileID: 8926484042661614854}
   m_MasterData:
     m_Owner: {fileID: 8926484042661614816}
     m_Value:
@@ -7547,7 +7506,7 @@ MonoBehaviour:
       m_SerializableObject: '{"vector":{"x":1.0,"y":0.0,"z":0.0}}'
     m_Space: 0
   m_Property:
-    name: Velocity
+    name: Force
     m_serializedType:
       m_SerializableType: UnityEditor.VFX.Vector, Unity.VisualEffectGraph.Editor,
         Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
@@ -7555,13 +7514,13 @@ MonoBehaviour:
     - m_Type: 3
       m_Min: -Infinity
       m_Max: Infinity
-      m_Tooltip: 'Velocity vector of the medium (eg: wind)'
+      m_Tooltip: Force vector applied to particles (in units per squared second)
       m_Regex: 
       m_RegexMaxLength: 0
   m_Direction: 0
   m_LinkedSlots:
   - {fileID: 8926484042661614795}
---- !u!114 &8926484042661614848
+--- !u!114 &8926484042661614855
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7573,15 +7532,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac39bd03fca81b849929b9c966f1836a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Parent: {fileID: 8926484042661614847}
+  m_Parent: {fileID: 8926484042661614854}
   m_Children:
-  - {fileID: 8926484042661614849}
-  - {fileID: 8926484042661614850}
-  - {fileID: 8926484042661614851}
+  - {fileID: 8926484042661614856}
+  - {fileID: 8926484042661614857}
+  - {fileID: 8926484042661614858}
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614847}
+  m_MasterSlot: {fileID: 8926484042661614854}
   m_MasterData:
     m_Owner: {fileID: 0}
     m_Value:
@@ -7603,7 +7562,7 @@ MonoBehaviour:
       m_RegexMaxLength: 0
   m_Direction: 0
   m_LinkedSlots: []
---- !u!114 &8926484042661614849
+--- !u!114 &8926484042661614856
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7615,12 +7574,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f780aa281814f9842a7c076d436932e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Parent: {fileID: 8926484042661614848}
+  m_Parent: {fileID: 8926484042661614855}
   m_Children: []
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614847}
+  m_MasterSlot: {fileID: 8926484042661614854}
   m_MasterData:
     m_Owner: {fileID: 0}
     m_Value:
@@ -7636,7 +7595,7 @@ MonoBehaviour:
     attributes: []
   m_Direction: 0
   m_LinkedSlots: []
---- !u!114 &8926484042661614850
+--- !u!114 &8926484042661614857
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7648,12 +7607,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f780aa281814f9842a7c076d436932e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Parent: {fileID: 8926484042661614848}
+  m_Parent: {fileID: 8926484042661614855}
   m_Children: []
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614847}
+  m_MasterSlot: {fileID: 8926484042661614854}
   m_MasterData:
     m_Owner: {fileID: 0}
     m_Value:
@@ -7669,7 +7628,7 @@ MonoBehaviour:
     attributes: []
   m_Direction: 0
   m_LinkedSlots: []
---- !u!114 &8926484042661614851
+--- !u!114 &8926484042661614858
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7681,12 +7640,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f780aa281814f9842a7c076d436932e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Parent: {fileID: 8926484042661614848}
+  m_Parent: {fileID: 8926484042661614855}
   m_Children: []
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614847}
+  m_MasterSlot: {fileID: 8926484042661614854}
   m_MasterData:
     m_Owner: {fileID: 0}
     m_Value:
@@ -7702,7 +7661,7 @@ MonoBehaviour:
     attributes: []
   m_Direction: 0
   m_LinkedSlots: []
---- !u!114 &8926484042661614852
+--- !u!114 &8926484042661614859
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -7711,7 +7670,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f780aa281814f9842a7c076d436932e7, type: 3}
+  m_Script: {fileID: 11500000, guid: c52d920e7fff73b498050a6b3c4404ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Parent: {fileID: 0}
@@ -7719,32 +7678,25 @@ MonoBehaviour:
   m_UIPosition: {x: 0, y: 0}
   m_UICollapsed: 1
   m_UISuperCollapsed: 0
-  m_MasterSlot: {fileID: 8926484042661614852}
+  m_MasterSlot: {fileID: 8926484042661614859}
   m_MasterData:
-    m_Owner: {fileID: 8926484042661614816}
+    m_Owner: {fileID: 8926484042661614799}
     m_Value:
       m_Type:
-        m_SerializableType: System.Single, mscorlib, Version=4.0.0.0, Culture=neutral,
+        m_SerializableType: System.UInt32, mscorlib, Version=4.0.0.0, Culture=neutral,
           PublicKeyToken=b77a5c561934e089
-      m_SerializableObject: 1
+      m_SerializableObject: 0
     m_Space: 2147483647
   m_Property:
-    name: Drag
+    name: Seed
     m_serializedType:
-      m_SerializableType: System.Single, mscorlib, Version=4.0.0.0, Culture=neutral,
+      m_SerializableType: System.UInt32, mscorlib, Version=4.0.0.0, Culture=neutral,
         PublicKeyToken=b77a5c561934e089
     attributes:
-    - m_Type: 1
-      m_Min: 0
-      m_Max: Infinity
-      m_Tooltip: 
-      m_Regex: 
-      m_RegexMaxLength: 0
     - m_Type: 3
       m_Min: -Infinity
       m_Max: Infinity
-      m_Tooltip: Drag coefficient. The higher the drag, the more the force will have
-        influence over the particle velocity
+      m_Tooltip: Seed to compute the constant random
       m_Regex: 
       m_RegexMaxLength: 0
   m_Direction: 0

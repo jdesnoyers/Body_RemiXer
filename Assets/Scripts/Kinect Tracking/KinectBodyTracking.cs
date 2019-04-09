@@ -44,7 +44,9 @@ public class KinectBodyTracking : MonoBehaviour
 
     [SerializeField] private bool rotateToNextJoint = true;
     public GameObject jointOrienterObject;
-    
+
+    public bool positionFloorBool = true;
+
     private float lerpTime = 0f;
 
     private BodySourceManager _BodyManager;
@@ -257,7 +259,10 @@ public class KinectBodyTracking : MonoBehaviour
         floor = _BodyManager.GetFloor();
         if (floor != null)
         {
-            kinectSpaceObject.transform.localPosition = new Vector3(kinectSpaceObject.transform.localPosition.x, floor.W + floorOffset, kinectSpaceObject.transform.localPosition.z);
+            if(positionFloorBool)
+            {
+                kinectSpaceObject.transform.localPosition = new Vector3(kinectSpaceObject.transform.localPosition.x, floor.W + floorOffset, kinectSpaceObject.transform.localPosition.z);
+            }
 
             if (!float.IsNaN(floor.Tilt))
             {
