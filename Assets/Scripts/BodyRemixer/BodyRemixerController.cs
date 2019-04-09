@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-public enum RemixMode { off, average, exquisite, shiva };
+public enum RemixMode { off, average, exquisite, shiva, swap };
 
 [System.Serializable]
 public class BoolEvent : UnityEvent<bool>
@@ -36,20 +36,24 @@ public class BodyRemixerController : MonoBehaviour
 
     [HideInInspector] public UnityAction ikAction;
 
-    private Dictionary<ulong, Dictionary<string, GameObject>> _KinectJointMap = new Dictionary<ulong, Dictionary<string, GameObject>>();
-    private Dictionary<ulong, GameObject> _MeshBodies = new Dictionary<ulong, GameObject>();
-    private Dictionary<ulong, GameObject[]> _MeshJointMap = new Dictionary<ulong, GameObject[]>();
+    private Dictionary<ulong, Dictionary<string, GameObject>> kinectJointMap = new Dictionary<ulong, Dictionary<string, GameObject>>();
+    private Dictionary<ulong, GameObject> meshBodies = new Dictionary<ulong, GameObject>();
+    private Dictionary<ulong, GameObject[]> meshJointMap = new Dictionary<ulong, GameObject[]>();
     private List<ulong> knownMeshIds = new List<ulong>();
 
 
 
     private GameObject[] _thirdPersonJointMap;
+    private Dictionary<ulong, GameObject> shivaThirdBodies = new Dictionary<ulong, GameObject>();   //dictionary of Shiva Third Person joints
+    private Dictionary<ulong, GameObject[]> shivaThirdJointMap = new Dictionary<ulong, GameObject[]>();   //dictionary of Shiva Third Person joints
 
-    private Dictionary<ulong, GameObject> _averageBodies = new Dictionary<ulong, GameObject>(); //dictionary of average bodies to keep track of bodies used for exquisite corpse and averager
-    private Dictionary<ulong, GameObject[]> _averageJointMap = new Dictionary<ulong, GameObject[]>();   //dictionary of average joints to access each joint
+    private Dictionary<ulong, GameObject> remixerBodies = new Dictionary<ulong, GameObject>(); //dictionary of average bodies to keep track of bodies used for exquisite corpse and averager
+    private Dictionary<ulong, GameObject[]> remixerJointMap = new Dictionary<ulong, GameObject[]>();   //dictionary of average joints to access each joint
 
-    private Dictionary<ulong, Dictionary<ulong, GameObject>> _shivaBodies = new Dictionary<ulong, Dictionary<ulong, GameObject>>(); //2D dictionary to access each shiva body
-    private Dictionary<ulong, Dictionary<ulong, GameObject[]>> _shivaJointMap = new Dictionary<ulong, Dictionary<ulong, GameObject[]>>(); //2D dictionary to access each shiva body
+    private Dictionary<ulong, Dictionary<ulong, GameObject>> shivaBodies = new Dictionary<ulong, Dictionary<ulong, GameObject>>(); //2D dictionary to access each shiva body
+    private Dictionary<ulong, Dictionary<ulong, GameObject[]>> shivaJointMap = new Dictionary<ulong, Dictionary<ulong, GameObject[]>>(); //2D dictionary to access each shiva body
+
+    private Dictionary<ulong, ulong> swapBodies = new Dictionary<ulong, ulong>();
 
     private Transform kinectTransform;
     private Quaternion convertedRotation;
@@ -58,7 +62,7 @@ public class BodyRemixerController : MonoBehaviour
     private Quaternion zeroQuaternion = new Quaternion(0, 0, 0, 0);
     private Vector3 flatScale = new Vector3(0, 1, 1);
 
-    private string[] _meshJointNames =
+    private string[] meshJointNames =
     {
     "Neo",
         "Neo_Reference",
@@ -125,68 +129,55 @@ public class BodyRemixerController : MonoBehaviour
         _headRadSq = HeadRadius * HeadRadius; //square radius for later use
 
         bodyTracker.DelegateBodies += UpdateRemixer; //add remixer to delegate function in body tracker
-
-        //setup third person body
-        if (thirdPersonBody == null)
-        {
-            thirdPersonBody = CreateThirdPersonBody();
-        }
-        else
-        {
-            thirdPersonBody = CreateThirdPersonBody(thirdPersonBody);
-        }
-
+        
         if (thirdPersonToggle == null)
             thirdPersonToggle = new BoolEvent();
 
-        thirdPersonToggle.AddListener(thirdPersonBody.transform.GetChild(0).transform.GetChild(0).gameObject.SetActive);
+        //thirdPersonToggle.AddListener(thirdPersonBody.transform.GetChild(0).transform.GetChild(0).gameObject.SetActive);
 
     }
 
-    // Update is called once per frame
+    //Late Update is used to ensure we have the data from the Kinect updated first
     void LateUpdate()
     {
-        
 
+        //toggle event for third person view
         if (thirdPerson != thirdPersonOld)
         {
             thirdPersonToggle.Invoke(thirdPerson);
             thirdPersonOld = thirdPerson;
         }
 
-        switch (remixMode)
+        //toggle event for seeing bodies
+
+        if (bodyTracker.trackedIds.Count != 0)
         {
-            case RemixMode.off:
-                {
-                    break;
-                }
-            case RemixMode.average:
-                {
-                    AverageBody();
-                    break;
-                }
-            case RemixMode.exquisite:
-                {
-                    ExquisiteCorpse();
-                    break;
-                }
-            case RemixMode.shiva:
-                {
-                    break;
-                }
-
-        }
-
-        foreach (ulong trackingId in bodyTracker.trackedIds)
-        {
-            RefreshMeshBodyObject(trackingId);
-
-            if (_MeshBodies.Count == 1)
+            switch (remixMode)
             {
+                case RemixMode.off:
+                    {
+                        break;
+                    }
+                case RemixMode.average:
+                    {
+                        UpdateAverageBody();
+                        break;
+                    }
+                case RemixMode.exquisite:
+                    {
+                        UpdateExquisiteCorpse();
+                        break;
+                    }
+                case RemixMode.shiva:
+                    {
+                        break;
+                    }
 
             }
-            else
+
+            foreach (ulong trackingId in bodyTracker.trackedIds)
             {
+                RefreshMeshBodyObject(trackingId);
 
                 switch (remixMode)
                 {
@@ -196,12 +187,12 @@ public class BodyRemixerController : MonoBehaviour
                         }
                     case RemixMode.average:
                         {
-                            UpdateBodies(trackingId);
+                            UpdateRemixBodies(trackingId);
                             break;
                         }
                     case RemixMode.exquisite:
                         {
-                            UpdateBodies(trackingId);
+                            UpdateRemixBodies(trackingId);
                             break;
                         }
                     case RemixMode.shiva:
@@ -209,577 +200,156 @@ public class BodyRemixerController : MonoBehaviour
 
                             foreach (ulong shivaId in bodyTracker.trackedIds)
                             {
-                                ShivaBodies(trackingId, shivaId);
+                                UpdateShivaBodies(trackingId, shivaId);
 
+                            }
+
+                            UpdateShivaThird(trackingId);
+
+                            break;
+                        }
+                    case RemixMode.swap:
+                        {
+                            if (swapBodies.ContainsKey(trackingId))
+                            {
+                                UpdateSwapBodies(trackingId, swapBodies[trackingId]);
+                            }
+                            else
+                            {
+                                UpdateSwapBodies(trackingId, trackingId);
                             }
                             break;
                         }
 
                 }
-
             }
         }
 
     }
 
-    void AverageBody()
-    {
 
-        Vector3[] positionAverager = new Vector3[_thirdPersonJointMap.Length];
-
-        joints = _thirdPersonJointMap;
-
-        for (int i = 0; i < joints.Length; i++)
-        {
-            Quaternion rotationAverage = Quaternion.identity;
-            Vector4 quaternionCumulator = new Vector4();
-            int n = 0;
-
-            for (int j = 0; j < knownMeshIds.Count; j++)
-            {
-                if (_MeshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
-                {
-                    n++;
-                    positionAverager[i] += _MeshJointMap[knownMeshIds[j]][i].transform.localPosition;
-                    rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, _MeshJointMap[knownMeshIds[j]][i].transform.localRotation, _MeshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
-                }
-            }
-            if (n == 0)
-            {
-                joints[i].transform.localScale = flatScale;
-            }
-            else
-            {
-                if(i == 0)
-                {
-                    joints[i].transform.localPosition = new Vector3(joints[i].transform.localPosition.x,positionAverager[i].y / knownMeshIds.Count, joints[i].transform.localPosition.z);
-                }
-                else
-                {
-                    joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
-                    joints[i].transform.localRotation = rotationAverage;
-                }
-                joints[i].transform.localScale = Vector3.one;
-            }
-        }
-
-    }
-    
-    void ExquisiteCorpse()
-    {
-        joints = _thirdPersonJointMap;
-
-        for(int i = 1; i < joints.Length; i++)
-        {
-            //REVISIT - change to control which limbs are controlled by which player to simplify code
-            //change control mapping based on how many players are present
-            switch (knownMeshIds.Count)
-            {
-                case 1:
-                    {
-                        joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                        joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                        joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        break;
-                    }
-                case 2:
-                    {
-                        if (i > 12) //player 1 controls upper body
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else //player 2 controls lower body
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-                case 3:
-                    {
-                        if (i > 17)
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 12)
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else //player 2 controls lower body
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-
-                        break;
-                    }
-                case 4:
-                    {
-                        if (i > 17) //player 1 controls right arm and head
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 2 controls torso and left arm
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 3 controls right leg
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else //player 4 controls left leg and lower torso
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-
-                        break;
-                    }
-                case 5:
-                    {
-                        if (i > 21) //player 1 controls head
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 17) //player 2 controls right arm
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 13) //player 3 controls left arm
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 1 controls torso
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 4 controls right leg
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-                        else if (i > 2) //player 5 controls left leg
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        else //player 1 controls torso
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-                case 6:
-                    {
-                        if (i > 21) //player 1 controls head
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 17) //player 2 controls right arm
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 13) //player 3 controls left arm
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 4 controls torso
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 5 controls right leg
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        else if (i > 2) //player 6 controls left leg
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[5]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[5]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[5]][i].transform.localScale;
-
-                        }
-                        else //player 4 controls torso
-                        {
-                            joints[i].transform.localPosition = _MeshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = _MeshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = _MeshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-
-            }
-
-        }
-    }
-
-    /*void UpdateBodiesOld(ulong id)
-    {
-
-        Vector3[] positionAverager = new Vector3[_averageJointMap[id].Length];
-
-        joints = _averageJointMap[id];
-
-        for (int i = 0; i < joints.Length; i++)
-        {
-            if (i < 3)
-            {
-                joints[i].transform.position = _MeshJointMap[id][i].transform.position; //set equal to root joint by ID
-                joints[i].transform.rotation = _MeshJointMap[id][i].transform.rotation; //set equal to root joint by ID
-            }
-            else
-            {
-                Quaternion rotationAverage = Quaternion.identity;
-                Vector4 quaternionCumulator = new Vector4();
-                int n = 0;
-
-                for (int j = 0; j < knownMeshIds.Count; j++)
-                {
-                    if (_MeshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
-                    {
-                        n++;
-                        positionAverager[i] += _MeshJointMap[knownMeshIds[j]][i].transform.localPosition;
-                        rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, _MeshJointMap[knownMeshIds[j]][i].transform.localRotation, _MeshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
-                    }
-                }
-                if (n == 0)
-                {
-                    joints[i].transform.localScale = flatScale;
-                }
-                else
-                {
-                    joints[i].transform.localScale = Vector3.one;
-                    joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
-                    joints[i].transform.localRotation = rotationAverage;
-                }
-            }
-
-
-        }
-
-    }*/
-
-    void UpdateBodies(ulong id)
-    {
-        
-        joints = _averageJointMap[id];
-
-        for (int i = 0; i < joints.Length; i++)
-        {
-            if (i < 3)
-            {
-                joints[i].transform.position = _MeshJointMap[id][i].transform.position; //set equal to root joint by ID
-                joints[i].transform.rotation = _MeshJointMap[id][i].transform.rotation; //set equal to root joint by ID
-            }
-            else
-            {
-                joints[i].transform.localScale = _thirdPersonJointMap[i].transform.localScale;
-                joints[i].transform.localPosition = _thirdPersonJointMap[i].transform.localPosition;
-                joints[i].transform.localRotation = _thirdPersonJointMap[i].transform.localRotation;
-                
-            }
-
-        }
-
-    }
-
-
-    //updates shiva body from mesh bodies - id1 is root body, id2 is target body
-    void ShivaBodies(ulong id1, ulong id2)
-    {
-
-        //to debug 2D dictionary
-        /*if(_shivaJointMap.ContainsKey(id1))
-        {
-            int count = 0;
-            foreach (ulong key in _shivaJointMap[id1].Keys)
-            {
-                Debug.Log(id1 + " - Second Level " + count + ": " + key);
-                count++;
-            }
-            if (!_shivaJointMap[id1].ContainsKey(id2))
-            {
-                Debug.Log(id1 + "is MISSING second component:" + id2);
-            }
-        }
-        else
-        {
-            Debug.Log("MISSING first component" + id1);
-        }*/
-
-        joints = _shivaJointMap[id1][id2];
-
-        for (int i = 0; i < joints.Length; i++)
-        {
-            if (i < 3)
-            {
-
-                joints[i].transform.position = _MeshJointMap[id1][i].transform.position; //set equal to root joint by ID
-                joints[i].transform.rotation = _MeshJointMap[id1][i].transform.rotation; //set equal to root joint by ID
-            }
-            else if (i > 21 || (i > 10 && i < 14))
-            {
-                joints[i].transform.localPosition = _MeshJointMap[id1][i].transform.localPosition; //set position equal to root joint by ID
-                joints[i].transform.localRotation = _MeshJointMap[id1][i].transform.localRotation; //set rotation equal to root joint by ID
-                joints[i].transform.localScale = _MeshJointMap[id1][i].transform.localScale; //set scale equal to root joint by ID
-            }
-            else
-            {
-                joints[i].transform.localPosition = _MeshJointMap[id2][i].transform.localPosition; //set position equal to target joint by ID
-                joints[i].transform.localRotation = _MeshJointMap[id2][i].transform.localRotation; //set rotation equal to target joint by ID
-                joints[i].transform.localScale = _MeshJointMap[id2][i].transform.localScale; //set scale equal to target joint by ID
-
-            }
-        }
-    }
-
+    //delegate function called through Kinect body tracking to keep things synchronized
     void UpdateRemixer()
     {
 
-        knownMeshIds = new List<ulong>(_MeshBodies.Keys);
+        knownMeshIds = new List<ulong>(meshBodies.Keys);
 
         // First delete untracked bodies
         foreach (ulong trackingId in knownMeshIds)
         {
             if (!bodyTracker.trackedIds.Contains(trackingId))
             {
-                Destroy(_MeshBodies[trackingId]);
-                _MeshBodies.Remove(trackingId);
-                _MeshJointMap.Remove(trackingId);
+                Destroy(meshBodies[trackingId]);
+                meshBodies.Remove(trackingId);
+                meshJointMap.Remove(trackingId);
 
-                if (_averageBodies.ContainsKey(trackingId))
-                {
-                    Destroy(_averageBodies[trackingId]);
-                    _averageBodies.Remove(trackingId);
-                    _averageJointMap.Remove(trackingId);
-                }
-                if (_shivaBodies.ContainsKey(trackingId))
-                {
-                    foreach (ulong trackId in knownMeshIds)
-                    {
-                        if (_shivaBodies.ContainsKey(trackId))
-                        {
-                            if (_shivaBodies[trackId].ContainsKey(trackingId))
-                            {
-                                Destroy(_shivaBodies[trackId][trackingId]); //destroy each instance of the untracked Shiva body from other tracked bodies
+                CleanUpRemixerBodies(trackingId);
 
-                                _shivaBodies[trackId].Remove(trackingId);   //remove each instance of untracked Shiva body from sub-dictionaries
-                            }
-                        }
+                CleanUpShivaBodies(trackingId);
 
-                        if (_shivaBodies[trackingId].ContainsKey(trackId))
-                        {
-                            Destroy(_shivaBodies[trackingId][trackId]); //destroy all Shiva bodies from untracked body
-                        }
+                swapBodies.Remove(swapBodies[trackingId]); //remove connected entry
+                swapBodies.Remove(trackingId);  //remove entry
 
-                        if (_shivaJointMap[trackId].ContainsKey(trackingId))
-                        {
-                            _shivaJointMap[trackId].Remove(trackingId);
-                        }
-                    }
-
-                    _shivaBodies.Remove(trackingId); //remove untracked shiva body from dictionary
-
-                    if (_shivaJointMap.ContainsKey(trackingId))
-                    {
-                        _shivaJointMap.Remove(trackingId);
-                    }
-
-                }
             }
+        }
+
+        if(knownMeshIds.Count == 0)
+        {
+            Destroy(thirdPersonBody);
         }
 
         //then add newly tracked bodies
         foreach (ulong trackingId in bodyTracker.trackedIds)
         {
-            if (!_MeshBodies.ContainsKey(trackingId))
+            if (!meshBodies.ContainsKey(trackingId))
             {
-                _MeshBodies[trackingId] = CreateMeshBody(trackingId);
+                meshBodies[trackingId] = CreateMeshBody(trackingId);
             }
 
-            if ((remixMode == RemixMode.average || remixMode == RemixMode.exquisite) && !_averageBodies.ContainsKey(trackingId) && knownMeshIds.Count > 1)
+            if (remixMode == RemixMode.average || remixMode == RemixMode.exquisite || remixMode == RemixMode.swap)
             {
-                _averageBodies[trackingId] = CreateMeshAverager(trackingId);
+                if (!remixerBodies.ContainsKey(trackingId))
+                    remixerBodies[trackingId] = CreateRemixerBody(trackingId);
+
+                //clean up other remixer bodies
+                CleanUpShivaBodies(trackingId);
+
+                if(thirdPersonBody == null)
+                {
+                    thirdPersonBody = CreateThirdPersonBody();
+                }
+
             }
-            if ((remixMode == RemixMode.shiva) && !_shivaBodies.ContainsKey(trackingId) && knownMeshIds.Count > 1)
+            else if (remixMode == RemixMode.shiva)
             {
+                if (!shivaBodies.ContainsKey(trackingId))
+                {
+                    shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
+
+                    //add dictionary entry for each other new body and sub-dictionary entries for all
+                    foreach (ulong trackId in bodyTracker.trackedIds)
+                    {
+
+                        if (!shivaBodies[trackingId].ContainsKey(trackId))
+                        {
+                            shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
+                        }
+                        if (!shivaBodies[trackId].ContainsKey(trackingId))
+                        {
+                            shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
+                        }
+
+                    }
+                }
+
                 //add dictionary for this new tracked body
-                if (!_shivaBodies.ContainsKey(trackingId))
+
+                if (!shivaThirdBodies.ContainsKey(trackingId))
                 {
-                    _shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
+                    shivaThirdBodies[trackingId] = CreateThirdShiva(trackingId);
                 }
 
-                //add dictionary entry for each other new body and sub-dictionary entries for all
-                foreach (ulong trackId in bodyTracker.trackedIds)
+                //clean up other remixer bodies
+                CleanUpRemixerBodies(trackingId);
+                
+                if(thirdPersonBody != null)
                 {
-
-                    if (!_shivaBodies.ContainsKey(trackId))
-                    {
-                        _shivaBodies.Add(trackId, new Dictionary<ulong, GameObject>());
-                    }
-                    if (!_shivaBodies[trackingId].ContainsKey(trackId))
-                    {
-                        _shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
-                    }
-                    if (!_shivaBodies[trackId].ContainsKey(trackingId))
-                    {
-                        _shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
-                    }
-                    if (!_shivaBodies[trackId].ContainsKey(trackId))
-                    {
-                        _shivaBodies[trackId].Add(trackId, CreateShivaBody(trackId, trackId));
-                    }
-
+                    Destroy(thirdPersonBody);
                 }
+
             }
-        }
-
-    }
-
-    private GameObject CreateThirdPersonBody()
-    {
-        if (BodyPrefab == null)
-        {
-            return null;
-        }
-        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity, GetComponent<Transform>());
-        body.name = "ThirdPerson";
-
-        body = CreateThirdPersonBody(body);
-
-        return body;
-
-    }
-
-    private GameObject CreateThirdPersonBody(GameObject body)
-    {
-        _thirdPersonJointMap = body.GetComponent<JointCollection>().jointArray; //copy array of game objects from prefab
-
-        return body;
-    }
-
-
-    private GameObject CreateMeshAverager(ulong id)
-    {
-        if (BodyPrefab == null)
-        {
-            return null;
-        }
-        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity);
-        body.name = "BodyAverager" + id;
-
-        _averageJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
-
-        return body;
-    }
-
-    private GameObject CreateShivaBody(ulong id1, ulong id2)
-    {
-        if (BodyPrefab == null)
-        {
-            return null;
-        }
-        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity);
-        body.name = "ShivaBody" + id1 + "_origin" + id2;
-
-        if (!_shivaJointMap.ContainsKey(id1))
-        {
-            _shivaJointMap.Add(id1, new Dictionary<ulong, GameObject[]>());
-        }
-
-        if (!_shivaJointMap[id1].ContainsKey(id2))
-        {
-            _shivaJointMap[id1].Add(id2, body.GetComponent<JointCollection>().jointArray);
-        }
-
-        return body;
-    }
-
-    private GameObject CreateMeshBody(ulong id)
-    {
-        if (BodyPrefab == null)
-        {
-            return null;
-        }
-
-        GameObject body = Instantiate(BodyPrefab);
-        body.name = "MeshBody:" + id;
-
-        body.transform.position = Vector3.zero;
-        body.transform.rotation = Quaternion.identity;
-
-        _MeshJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
-
-        Dictionary<string, GameObject> kinectDictionary = new Dictionary<string, GameObject>();
-        for (int i = 0; i < kinectJointNames.Length; i++)   //add mapped kinect entries to dictionary to correlate one to the other
-        {
-
-            if (kinectJointNames[i] != null)
+            else
             {
-                kinectDictionary.Add(_meshJointNames[i], bodyTracker.GetBody(id).transform.Find(kinectJointNames[i]).gameObject);
+                CleanUpRemixerBodies(trackingId);
+                CleanUpShivaBodies(trackingId);
+                Destroy(thirdPersonBody);
+            }
+        }
+
+        //for direct body swap populate dictionary of pairs when possible
+        if(bodyTracker.trackedIds.Count % 2 == 0)
+        {
+            List<ulong> trackIds = bodyTracker.trackedIds;
+            for (int i = 0; i < trackIds.Count; i += 2)
+            {
+                if (!swapBodies.ContainsKey(trackIds[i]))
+                {
+
+                    {
+                        swapBodies.Add(trackIds[i], trackIds[i + 1]);
+                        swapBodies.Add(trackIds[i + 1], trackIds[i]);
+                    }
+                }
 
             }
         }
 
-        _KinectJointMap.Add(id, kinectDictionary);  //apply dictionary to joint map by ID
 
-        return body;
+
     }
 
+    //refreshes base mesh body objects
+    //the data from each of these are copied into the other remixer bodies
     private void RefreshMeshBodyObject(ulong id)
     {
 
@@ -790,14 +360,14 @@ public class BodyRemixerController : MonoBehaviour
          * 
          */
 
-        joints = _MeshJointMap[id];
+        joints = meshJointMap[id];
 
-        Dictionary<string, GameObject> kinectJoints = _KinectJointMap[id];
+        Dictionary<string, GameObject> kinectJoints = kinectJointMap[id];
 
         //position all joints based on kinect transforms
         for (int i = 0; i < joints.Length; i++)
         {
-            string findJoint = _meshJointNames[i];
+            string findJoint = meshJointNames[i];
 
             if (kinectJoints.ContainsKey(findJoint))
             {
@@ -882,15 +452,566 @@ public class BodyRemixerController : MonoBehaviour
 
     }
 
+    #region remixer body creation methods
+    private GameObject CreateThirdShiva(ulong id)
+    {
+        if (BodyPrefab == null)
+        {
+            return null;
+        }
+        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity, GetComponent<Transform>());
+        body.name = "ThirdShiva" + id;
+
+        shivaThirdJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
+
+        return body;
+
+    }
+
+    private GameObject CreateThirdPersonBody()
+    {
+        if (BodyPrefab == null)
+        {
+            return null;
+        }
+        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity, GetComponent<Transform>());
+        body.name = "ThirdPerson";
+
+        _thirdPersonJointMap = body.GetComponent<JointCollection>().jointArray; //copy array of game objects from prefab
+
+        return body;
+
+    }
+
+    private GameObject CreateRemixerBody(ulong id)
+    {
+        if (BodyPrefab == null)
+        {
+            return null;
+        }
+        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity);
+        body.name = "BodyAverager" + id;
+
+        remixerJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
+
+        return body;
+    }
+
+    private GameObject CreateShivaBody(ulong id1, ulong id2)
+    {
+        if (BodyPrefab == null)
+        {
+            return null;
+        }
+        GameObject body = Instantiate(BodyPrefab, Vector3.zero, Quaternion.identity);
+        body.name = "ShivaBody" + id1 + "_origin" + id2;
+
+        if (!shivaJointMap.ContainsKey(id1))
+        {
+            shivaJointMap.Add(id1, new Dictionary<ulong, GameObject[]>());
+        }
+
+        if (!shivaJointMap[id1].ContainsKey(id2))
+        {
+            shivaJointMap[id1].Add(id2, body.GetComponent<JointCollection>().jointArray);
+        }
+
+        return body;
+    }
+
+    private GameObject CreateMeshBody(ulong id)
+    {
+        if (BodyPrefab == null)
+        {
+            return null;
+        }
+
+        GameObject body = Instantiate(BodyPrefab);
+        body.name = "MeshBody:" + id;
+
+        body.transform.position = Vector3.zero;
+        body.transform.rotation = Quaternion.identity;
+
+        meshJointMap.Add(id, body.GetComponent<JointCollection>().jointArray); //copy array of game objects from prefab
+
+        Dictionary<string, GameObject> kinectDictionary = new Dictionary<string, GameObject>();
+        for (int i = 0; i < kinectJointNames.Length; i++)   //add mapped kinect entries to dictionary to correlate one to the other
+        {
+
+            if (kinectJointNames[i] != null)
+            {
+                kinectDictionary.Add(meshJointNames[i], bodyTracker.GetBody(id).transform.Find(kinectJointNames[i]).gameObject);
+
+            }
+        }
+
+        kinectJointMap.Add(id, kinectDictionary);  //apply dictionary to joint map by ID
+
+        return body;
+    }
+    #endregion
+
+    #region remixer body update methods
+
+    void UpdateAverageBody()
+    {
+
+        Vector3[] positionAverager = new Vector3[_thirdPersonJointMap.Length];
+
+        joints = _thirdPersonJointMap;
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            Quaternion rotationAverage = Quaternion.identity;
+            Vector4 quaternionCumulator = new Vector4();
+            int n = 0;
+
+            for (int j = 0; j < knownMeshIds.Count; j++)
+            {
+                if (meshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
+                {
+                    n++;
+                    positionAverager[i] += meshJointMap[knownMeshIds[j]][i].transform.localPosition;
+                    rotationAverage = Math3D.AverageQuaternion(ref quaternionCumulator, meshJointMap[knownMeshIds[j]][i].transform.localRotation, meshJointMap[knownMeshIds[j]][0].transform.localRotation, n);
+                }
+            }
+            if (n == 0)
+            {
+                joints[i].transform.localScale = flatScale;
+            }
+            else
+            {
+                if (i == 0)
+                {
+                    joints[i].transform.localPosition = new Vector3(joints[i].transform.localPosition.x, positionAverager[i].y / knownMeshIds.Count, joints[i].transform.localPosition.z);
+                }
+                else
+                {
+                    joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
+                    joints[i].transform.localRotation = rotationAverage;
+                }
+                joints[i].transform.localScale = Vector3.one;
+            }
+        }
+
+    }
+
+    void UpdateExquisiteCorpse()
+    {
+        joints = _thirdPersonJointMap;
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+
+            //REVISIT - change to control which limbs are controlled by which player to simplify code
+            //change control mapping based on how many players are present
+            switch (knownMeshIds.Count)
+            {
+                case 1:
+                    {
+                        joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                        joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                        joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                        break;
+                    }
+                case 2:
+                    {
+                        if (i > 12) //player 1 controls upper body
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                        }
+                        else //player 2 controls lower body
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                        }
+                        break;
+                    }
+                case 3:
+                    {
+                        if (i > 17)
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                        }
+                        else if (i > 12)
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                        }
+                        else //player 2 controls lower body
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                        }
+
+                        break;
+                    }
+                case 4:
+                    {
+                        if (i > 17) //player 1 controls right arm and head
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                        }
+                        else if (i > 10) //player 2 controls torso and left arm
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                        }
+                        else if (i > 6) //player 3 controls right leg
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                        }
+                        else //player 4 controls left leg and lower torso
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                        }
+
+                        break;
+                    }
+                case 5:
+                    {
+                        if (i > 21) //player 1 controls head
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                        }
+                        else if (i > 17) //player 2 controls right arm
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                        }
+                        else if (i > 13) //player 3 controls left arm
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                        }
+                        else if (i > 10) //player 1 controls torso
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                        }
+                        else if (i > 6) //player 4 controls right leg
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                        }
+                        else if (i > 2) //player 5 controls left leg
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                        }
+                        else //player 1 controls torso
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                        }
+                        break;
+                    }
+                case 6:
+                    {
+                        if (i > 21) //player 1 controls head
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                        }
+                        else if (i > 17) //player 2 controls right arm
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                        }
+                        else if (i > 13) //player 3 controls left arm
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                        }
+                        else if (i > 10) //player 4 controls torso
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                        }
+                        else if (i > 6) //player 5 controls right leg
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                        }
+                        else if (i > 2) //player 6 controls left leg
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[5]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[5]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[5]][i].transform.localScale;
+
+                        }
+                        else //player 4 controls torso
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                        }
+                        break;
+                    }
+
+
+            }
+
+            if (i == 0)
+            {
+                joints[i].transform.localPosition = new Vector3(0, joints[i].transform.localPosition.y, 0);
+            }
+
+        }
+    }
+
+    void UpdateRemixBodies(ulong id)
+    {
+
+        joints = remixerJointMap[id];
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            if (i < 3)
+            {
+                joints[i].transform.position = meshJointMap[id][i].transform.position; //set equal to root joint by ID
+                joints[i].transform.rotation = meshJointMap[id][i].transform.rotation; //set equal to root joint by ID
+            }
+            else
+            {
+                joints[i].transform.localScale = _thirdPersonJointMap[i].transform.localScale;
+                joints[i].transform.localPosition = _thirdPersonJointMap[i].transform.localPosition;
+                joints[i].transform.localRotation = _thirdPersonJointMap[i].transform.localRotation;
+
+            }
+
+        }
+
+    }
+
+
+    void UpdateShivaThird(ulong id)
+    {
+        joints = shivaThirdJointMap[id];
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            if (i < 3)
+            {
+
+            }
+            else
+            {
+                joints[i].transform.localPosition = meshJointMap[id][i].transform.localPosition; //set position equal to target joint by ID
+                joints[i].transform.localRotation = meshJointMap[id][i].transform.localRotation; //set rotation equal to target joint by ID
+                joints[i].transform.localScale = meshJointMap[id][i].transform.localScale; //set scale equal to target joint by ID
+
+            }
+        }
+    }
+
+    //updates shiva body from mesh bodies - id1 is root body, id2 is target body
+    void UpdateShivaBodies(ulong id1, ulong id2)
+    {
+
+        //to debug 2D dictionary
+        /*if(shivaJointMap.ContainsKey(id1))
+        {
+            int count = 0;
+            foreach (ulong key in shivaJointMap[id1].Keys)
+            {
+                Debug.Log(id1 + " - Second Level " + count + ": " + key);
+                count++;
+            }
+            if (!shivaJointMap[id1].ContainsKey(id2))
+            {
+                Debug.Log(id1 + "is MISSING second component:" + id2);
+            }
+        }
+        else
+        {
+            Debug.Log("MISSING first component" + id1);
+        }*/
+
+        joints = shivaJointMap[id1][id2];
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            if (i < 3)
+            {
+
+                joints[i].transform.position = meshJointMap[id1][i].transform.position; //set equal to root joint by ID
+                joints[i].transform.rotation = meshJointMap[id1][i].transform.rotation; //set equal to root joint by ID
+            }
+            else if (i > 21 || (i > 10 && i < 14))
+            {
+                joints[i].transform.localPosition = meshJointMap[id1][i].transform.localPosition; //set position equal to root joint by ID
+                joints[i].transform.localRotation = meshJointMap[id1][i].transform.localRotation; //set rotation equal to root joint by ID
+                joints[i].transform.localScale = meshJointMap[id1][i].transform.localScale; //set scale equal to root joint by ID
+            }
+            else
+            {
+                joints[i].transform.localPosition = meshJointMap[id2][i].transform.localPosition; //set position equal to target joint by ID
+                joints[i].transform.localRotation = meshJointMap[id2][i].transform.localRotation; //set rotation equal to target joint by ID
+                joints[i].transform.localScale = meshJointMap[id2][i].transform.localScale; //set scale equal to target joint by ID
+
+            }
+        }
+
+    }
+
+    //swap limbs of id2 body onto id1 body
+    void UpdateSwapBodies(ulong id1, ulong id2)
+    {
+
+        joints = remixerJointMap[id1];
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            if (i < 3)
+            {
+
+                joints[i].transform.position = meshJointMap[id1][i].transform.position; //set equal to root joint by ID
+                joints[i].transform.rotation = meshJointMap[id1][i].transform.rotation; //set equal to root joint by ID
+            }
+            else if (i > 21 || (i > 10 && i < 14))
+            {
+                joints[i].transform.localPosition = meshJointMap[id1][i].transform.localPosition; //set position equal to root joint by ID
+                joints[i].transform.localRotation = meshJointMap[id1][i].transform.localRotation; //set rotation equal to root joint by ID
+                joints[i].transform.localScale = meshJointMap[id1][i].transform.localScale; //set scale equal to root joint by ID
+            }
+            else
+            {
+                joints[i].transform.localPosition = meshJointMap[id2][i].transform.localPosition; //set position equal to target joint by ID
+                joints[i].transform.localRotation = meshJointMap[id2][i].transform.localRotation; //set rotation equal to target joint by ID
+                joints[i].transform.localScale = meshJointMap[id2][i].transform.localScale; //set scale equal to target joint by ID
+
+            }
+        }
+
+    }
+
+    #endregion
+
+    #region remixer body cleanup methods
+
+    private void CleanUpShivaBodies(ulong id)
+    {
+
+        if (shivaBodies.ContainsKey(id))
+        {
+            foreach (ulong trackId in knownMeshIds)
+            {
+                if (shivaBodies.ContainsKey(trackId))
+                {
+                    if (shivaBodies[trackId].ContainsKey(id))
+                    {
+                        Destroy(shivaBodies[trackId][id]); //destroy each instance of the untracked Shiva body from other tracked bodies
+
+                        shivaBodies[trackId].Remove(id);   //remove each instance of untracked Shiva body from sub-dictionaries
+                    }
+                }
+
+                if (shivaBodies[id].ContainsKey(trackId))
+                {
+                    Destroy(shivaBodies[id][trackId]); //destroy all Shiva bodies from untracked body
+                }
+
+            }
+
+            shivaBodies.Remove(id); //remove untracked shiva body from dictionary
+
+            if (shivaJointMap.ContainsKey(id))
+            {
+                foreach (ulong trackId in knownMeshIds)
+                {
+                    if(shivaJointMap.ContainsKey(trackId))
+                    {
+                        if (shivaJointMap[trackId].ContainsKey(id))
+                        {
+                            shivaJointMap[trackId].Remove(id);
+                        }
+                    }
+                     
+                }
+                shivaJointMap.Remove(id);
+            }
+
+        }
+
+        if (shivaThirdBodies.ContainsKey(id))
+        {
+            Destroy(shivaThirdBodies[id]);
+            shivaThirdBodies.Remove(id);
+            shivaThirdJointMap.Remove(id);
+
+        }
+    }
+
+    private void CleanUpRemixerBodies(ulong id)
+    {
+        if (remixerBodies.ContainsKey(id))
+        {
+            Destroy(remixerBodies[id]);
+            remixerBodies.Remove(id);
+            remixerJointMap.Remove(id);
+
+        }
+    }
+
+
+    #endregion
+
+    //not used
     private void MeshBodyIK()
     {
 
         float t = (Time.time - bodyTracker.LastFrameTime()) * 30;
 
-        List<ulong> knownIds = new List<ulong>(_MeshBodies.Keys);
+        List<ulong> knownIds = new List<ulong>(meshBodies.Keys);
         foreach (ulong trackingId in knownIds)
         {
-            Animator animator = _MeshBodies[trackingId].GetComponentInChildren<Animator>();
+            Animator animator = meshBodies[trackingId].GetComponentInChildren<Animator>();
 
             Transform rightHandGoal = bodyTracker.GetBody(trackingId).transform.Find("HandRight").transform;
             Transform leftHandGoal = bodyTracker.GetBody(trackingId).transform.Find("HandLeft").transform;
