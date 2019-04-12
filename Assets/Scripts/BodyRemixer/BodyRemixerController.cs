@@ -327,7 +327,7 @@ public class BodyRemixerController : MonoBehaviour
         }
 
         //for direct body swap populate dictionary of pairs when possible
-        if(bodyTracker.trackedIds.Count % 2 == 0)
+        if(bodyTracker.trackedIds.Count > 1)
         {
             List<ulong> trackIds = bodyTracker.trackedIds;
             for (int i = 0; i < trackIds.Count; i += 2)

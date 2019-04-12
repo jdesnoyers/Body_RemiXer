@@ -5,6 +5,8 @@ namespace Smrvfx
 {
     public sealed class SkinnedMeshBaker : MonoBehaviour
     {
+        
+
         #region Editable attributes
 
         [SerializeField] SkinnedMeshRenderer _source = null;
@@ -12,6 +14,40 @@ namespace Smrvfx
         [SerializeField] RenderTexture _velocityMap = null;
         [SerializeField] RenderTexture _normalMap = null;
         [SerializeField] ComputeShader _compute = null;
+
+        #endregion
+
+        #region Added functions
+
+        public SkinnedMeshRenderer Source
+        {
+            get { return _source; }
+            set {_source = value; }
+        }
+
+        public RenderTexture PositionMap
+        {
+            get { return _positionMap; }
+            set { _positionMap = value; }
+        }
+
+        public RenderTexture VelocityMap
+        {
+            get { return _velocityMap; }
+            set { _velocityMap = value; }
+        }
+
+        public RenderTexture NormalMap
+        {
+            get { return _normalMap; }
+            set { _normalMap = value; }
+        }
+
+        public ComputeShader Compute
+        {
+            get { return _compute; }
+            set { _compute = value; }
+        }
 
         #endregion
 
@@ -131,9 +167,9 @@ namespace Smrvfx
 
             if (_tempPositionMap == null)
             {
-                _tempPositionMap = Utility.CreateRenderTexture(mapWidth, mapHeight);
-                _tempVelocityMap = Utility.CreateRenderTexture(mapWidth, mapHeight);
-                _tempNormalMap = Utility.CreateRenderTexture(mapWidth, mapHeight);
+                _tempPositionMap = Utility.CreateRenderTexture(_positionMap);
+                _tempVelocityMap = Utility.CreateRenderTexture(_positionMap);
+                _tempNormalMap = Utility.CreateRenderTexture(_positionMap);
             }
 
             // Set data and execute the transfer task.
@@ -155,6 +191,7 @@ namespace Smrvfx
             _compute.SetTexture(0, "NormalMap", _tempNormalMap);
 
             _compute.Dispatch(0, mapWidth / 8, mapHeight / 8, 1);
+
             Graphics.CopyTexture(_tempPositionMap, _positionMap);
             Graphics.CopyTexture(_tempVelocityMap, _velocityMap);
             Graphics.CopyTexture(_tempNormalMap, _normalMap);
