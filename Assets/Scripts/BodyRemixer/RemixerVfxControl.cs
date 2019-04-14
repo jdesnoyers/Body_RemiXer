@@ -15,7 +15,16 @@ public class RemixerVfxControl : MonoBehaviour
     {
     }
 
-    public void IntializeVFX(GameObject source, GameObject target)
+    private void Update()
+    {
+        //update VFX transform and SDF converter offset to match the current target's position
+        Vector3 targetPos = targetBody.body.transform.position;
+        visualFX.SetVector3("SDF Position", targetPos);
+        targetBody.meshSDF.offset = (-0.5f*targetPos) + new Vector3(0.5f,0.5f,0.5f);
+
+    }
+
+    public void IntializeVFX(GameObject source, GameObject target, Color sourceColor, Color targetColor)
     {
         sourceBody = new VFXbody(source);
         targetBody = new VFXbody(target);
@@ -23,37 +32,54 @@ public class RemixerVfxControl : MonoBehaviour
         if (visualFX == null)
             visualFX = GetComponent<VisualEffect>();
 
-        visualFX.SetTexture("Source Position", sourceBody.position);
-        visualFX.SetTexture("Source Velocity", sourceBody.velocity);
-        visualFX.SetTexture("Target Position", targetBody.position);
-        visualFX.SetVector3("SDF Position", sourceBody.body.transform.position);
+        Vector3 targetPos = targetBody.body.transform.position;
+
+        //set up VFX with textures and colours
+        visualFX.SetTexture("Source Position", sourceBody.positionMap);
+        visualFX.SetTexture("Source Velocity", sourceBody.velocityMap);
+        visualFX.SetVector3("SDF Position", targetPos);
+        visualFX.SetVector4("Source Color", sourceColor);
+        visualFX.SetVector4("Target Color", targetColor);
+
+        if(sourceBody.meshSDF == null)
+        {
+            sourceBody.meshSDF.vfxOutput = visualFX;
+        }
+
+        //set up SDF 
+        targetBody.meshSDF.vfxOutput = visualFX;
+        targetBody.meshSDF.offset = (-0.5f * targetPos) + new Vector3(0.5f, 0.5f, 0.5f);
     }
 
     public void IntializeVFX(GameObject source)
     {
         sourceBody = new VFXbody(source);
 
-        visualFX.SetTexture("Source Position", sourceBody.position);
-        visualFX.SetTexture("Source Velocity", sourceBody.velocity);
+        visualFX.SetTexture("Source Position", sourceBody.positionMap);
+        visualFX.SetTexture("Source Velocity", sourceBody.velocityMap);
         visualFX.SetVector3("SDF Position",sourceBody.body.transform.position);
 
+        sourceBody.meshSDF.vfxOutput = visualFX;
     }
 
+    //class to simplify calling relevant things from the target and source bodies
     public class VFXbody
     {
 
         private MeshBakerManager manager;
         public GameObject body;
-        public RenderTexture position;
-        public RenderTexture velocity;
-        public RenderTexture normal;
+        public RenderTexture positionMap;
+        public RenderTexture velocityMap;
+        public RenderTexture normalMap;
+        public MeshToSDF meshSDF;
 
         public VFXbody(GameObject body)
         {
             manager = body.GetComponent<MeshBakerManager>();
-            position = manager.positionMap;
-            velocity = manager.velocityMap;
-            normal = manager.normalMap;
+            positionMap = manager.positionMap;
+            velocityMap = manager.velocityMap;
+            normalMap = manager.normalMap;
+            meshSDF = body.GetComponent<MeshToSDF>();
 
         }
 

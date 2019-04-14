@@ -19,6 +19,7 @@ public class BodyRemixerController : MonoBehaviour
     public RemixMode remixMode = RemixMode.off;
     public bool thirdPerson = false;
     public bool firstPerson = true;
+    public bool oldBody = false;
     public GameObject thirdPersonBody;
     public GameObject BodyPrefab;
     public GameObject thirdPersonParent;
@@ -33,6 +34,9 @@ public class BodyRemixerController : MonoBehaviour
     public BoolEvent thirdPersonToggle;
 
     private bool thirdPersonOld;
+
+    [ColorUsage(true,true)] public Color[] bodyColors = new Color[6];
+    private Dictionary<ulong, Color> _bodyColors = new Dictionary<ulong, Color>();
 
     [HideInInspector] public UnityAction ikAction;
 
@@ -62,7 +66,9 @@ public class BodyRemixerController : MonoBehaviour
     private Quaternion zeroQuaternion = new Quaternion(0, 0, 0, 0);
     private Vector3 flatScale = new Vector3(0, 1, 1);
 
-    private string[] meshJointNames =
+    //for use with old body
+    /*
+    private string[] meshJointNamesOld =
     {
     "Neo",
         "Neo_Reference",
@@ -89,8 +95,40 @@ public class BodyRemixerController : MonoBehaviour
                             "Neo_Neck",
                                 "Neo_Head",
 
+    };*/
+
+    private string[] meshJointNames =
+    {
+    "Root",
+        "mixamorig",
+            "mixamorig_Hips",
+                "mixamorig_LeftUpLeg",
+                     "mixamorig_LeftLeg",
+                         "mixamorig_LeftFoot",
+                            "mixamorig_LeftToeBase",
+                "mixamorig_RightUpLeg",
+                    "mixamorig_RightLeg",
+                        "mixamorig_RightFoot",
+                            "mixamorig_RightToeBase",
+                "mixamorig_Spine",
+                    "NOT_USED",
+                        "mixamorig_Spine2",
+                            //"mixamorig_LeftShoulder",
+                                "mixamorig_LeftArm",
+                                    "mixamorig_LeftForeArm",
+                                        "mixamorig_LeftHand",
+                                            "mixamorig_LeftHandIndex1",
+                            //"mixamorig_RightShoulder",
+                                "mixamorig_RightArm",
+                                    "mixamorig_RightForeArm",
+                                        "mixamorig_RightHand",
+                                            "mixamorig_RightHandIndex1",
+                            "mixamorig_Neck",
+                                "mixamorig_Head",
+
     };
 
+    //add ThumbLeft ThumbRight HandTipLeft and HandTipRight along with corresponding joints above
     private string[] kinectJointNames =
     {
     "SpineBase",
@@ -104,17 +142,19 @@ public class BodyRemixerController : MonoBehaviour
                      "KneeRight",
                          "AnkleRight",
                             "FootRight",
-                null,
-                    "SpineMid",
-                        null,
-                            null,
+                "SpineMid", //moved up one
+                    null,
+                        "SpineShoulder", //added for MixamoRig
+                            //null,
                                 "ShoulderLeft",
                                     "ElbowLeft",
                                         "WristLeft",
-                            null,
+                                            "HandLeft",
+                            //null,
                                 "ShoulderRight",
                                     "ElbowRight",
                                         "WristRight",
+                                            "HandRight",
                             "Neck",
                                 "Head",
     };
@@ -377,36 +417,72 @@ public class BodyRemixerController : MonoBehaviour
 
                 if (!kinectTransform.rotation.Equals(zeroQuaternion))    //don't rotate joints if we don't have a value from the kinect
                 {
-                    if (i < 2) //if its one of the main body components then the rotation is different from the rest of the joints
+                    if (oldBody)
                     {
-                        convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * kinectTransform.rotation;
+                        if (i < 2) //if its one of the main body components then the rotation is different from the rest of the joints
+                        {
+                            convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * kinectTransform.rotation;
+
+                        }
+                        else if (i == 3 || i == 4 || i == 5 || i == 6) //rotations for left leg (except ankle)
+                        {
+                            convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.forward) * kinectTransform.rotation;
+                        }
+                        else if (i == 7 || i == 8 || i == 9 || i == 10) //rotations for right leg (except ankle)
+                        {
+                            convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * Quaternion.AngleAxis(90, kinectTransform.forward) * kinectTransform.rotation;
+                        }
+                        else if (i > 17 && i < 22) //rotations for 18-21 are inverted in the model
+                        {
+                            convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.right) * Quaternion.AngleAxis(-90, kinectTransform.up) * kinectTransform.rotation;
+
+                        }
+                        else //default rotation for other joints
+                        {
+                            convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.up) * Quaternion.AngleAxis(-90, kinectTransform.forward) * kinectTransform.rotation;
+
+                        }
 
                     }
-                    else if (i == 3 || i == 4 || i == 5 || i == 6) //rotations for left leg (except ankle)
+                    else
                     {
-                        convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.forward) * kinectTransform.rotation;
-                    }
-                    else if (i == 7 || i == 8 || i == 9 || i == 10) //rotations for right leg (except ankle)
-                    {
-                        convertedRotation = Quaternion.AngleAxis(180, kinectTransform.up) * Quaternion.AngleAxis(90, kinectTransform.forward) * kinectTransform.rotation;
-                    }
-                    else if (i > 17 && i < 22) //rotations for 18-21 are inverted in the model
-                    {
-                        convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.right) * Quaternion.AngleAxis(-90, kinectTransform.up) * kinectTransform.rotation;
+                        if ((i > 6 && i < 11) || (i > 17 && i < 22))
+                        {
+                            convertedRotation = Quaternion.AngleAxis(90, kinectTransform.up) * kinectTransform.rotation;
+                        }
+                        else if ((i > 13 && i < 18) || (i > 2 && i < 7))
+                        {
+                            convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.up) * kinectTransform.rotation;
+                        }
+                        else if (i == 22)
+                        {
 
-                    }
-                    else //default rotation for other joints
-                    {
-                        convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.up) * Quaternion.AngleAxis(-90, kinectTransform.forward) * kinectTransform.rotation;
+                        }
+                        else if (i == 23)
+                        {
+                            //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
+                            convertedRotation = kinectTransform.rotation;
+                            joints[22].transform.rotation = convertedRotation;
+                        }
+                        else
+                        {
+                            convertedRotation = kinectTransform.rotation;
 
+                        }
                     }
 
                     joints[i].transform.rotation = convertedRotation;
 
                 }
-                else
+                else if(i<23) //if its not the head and we don't hava a roation from the kinect, set it to match its parent's rotation
                 {
+                    
                     joints[i].transform.rotation = joints[i].transform.parent.transform.rotation;
+                }
+                else //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
+                {
+
+                    joints[i].transform.rotation = joints[i].transform.GetChild(0).transform.rotation;
                 }
 
                 if (positionJoints || i < 3)

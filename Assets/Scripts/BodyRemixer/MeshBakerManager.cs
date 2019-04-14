@@ -10,9 +10,9 @@ public class MeshBakerManager : MonoBehaviour
     [SerializeField] private RenderTexture renderTextureBase;
     
 
-    public RenderTexture positionMap = null;
-    public RenderTexture velocityMap = null;
-    public RenderTexture normalMap = null;
+    [HideInInspector] public RenderTexture positionMap = null;
+    [HideInInspector] public RenderTexture velocityMap = null;
+    [HideInInspector] public RenderTexture normalMap = null;
 
     private bool meshActive = true;
     
