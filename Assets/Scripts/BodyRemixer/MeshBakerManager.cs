@@ -8,7 +8,10 @@ public class MeshBakerManager : MonoBehaviour
 
     [SerializeField] private SkinnedMeshRenderer skinnedMesh;
     [SerializeField] private RenderTexture renderTextureBase;
-    
+
+    public RemixerVfxControl vfxControl;
+    public Transform armatureTransform;
+    public Transform hipTransform;
 
     [HideInInspector] public RenderTexture positionMap = null;
     [HideInInspector] public RenderTexture velocityMap = null;
@@ -22,20 +25,36 @@ public class MeshBakerManager : MonoBehaviour
         skinnedMesh.enabled = b;
     }
 
-    void Start()
+    void Awake()
     {
 
-        GetComponent<SkinnedMeshBaker>().Source = skinnedMesh; //link mesh to Skinned Mesh Baker
+        if(armatureTransform == null)
+        {
+            armatureTransform = transform.Find("Armature");
+        }
+
+        if (hipTransform == null)
+        {
+            hipTransform = transform.Find("Hip");
+        }
+
+
+
+        SkinnedMeshBaker baker = GetComponent<SkinnedMeshBaker>();
+        baker.Source = skinnedMesh; //link mesh to Skinned Mesh Baker
 
         //create new render textures to map vertices from skinned mesh to VFX Graph
-        GetComponent<SkinnedMeshBaker>().PositionMap = new RenderTexture(renderTextureBase);
-        GetComponent<SkinnedMeshBaker>().VelocityMap = new RenderTexture(renderTextureBase);
-        GetComponent<SkinnedMeshBaker>().NormalMap = new RenderTexture(renderTextureBase);
+        baker.PositionMap = new RenderTexture(renderTextureBase);
+        baker.PositionMap.name = "position";
+        baker.VelocityMap = new RenderTexture(renderTextureBase);
+        baker.VelocityMap.name = "velocity";
+        baker.NormalMap = new RenderTexture(renderTextureBase);
+        baker.NormalMap.name = "normal";
 
         //link to Skinned Mesh Baker
-        positionMap = GetComponent<SkinnedMeshBaker>().PositionMap;
-        velocityMap = GetComponent<SkinnedMeshBaker>().VelocityMap;
-        normalMap = GetComponent<SkinnedMeshBaker>().NormalMap;
+        positionMap = baker.PositionMap;
+        velocityMap = baker.VelocityMap;
+        normalMap = baker.NormalMap;
         
     }
 

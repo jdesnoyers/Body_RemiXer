@@ -283,6 +283,7 @@ public class BodyRemixerController : MonoBehaviour
                 meshBodies.Remove(trackingId);
                 meshJointMap.Remove(trackingId);
 
+
                 CleanUpRemixerBodies(trackingId);
 
                 CleanUpShivaBodies(trackingId);
@@ -293,23 +294,29 @@ public class BodyRemixerController : MonoBehaviour
             }
         }
 
-        if(knownMeshIds.Count == 0)
+        if (knownMeshIds.Count == 0)
         {
             Destroy(thirdPersonBody);
         }
 
         //then add newly tracked bodies
-        foreach (ulong trackingId in bodyTracker.trackedIds)
+        //foreach (ulong trackingId in bodyTracker.trackedIds)
+        for(int i = 0; i < bodyTracker.trackedIds.Count; i++)
         {
+            ulong trackingId = bodyTracker.trackedIds[i];
             if (!meshBodies.ContainsKey(trackingId))
             {
                 meshBodies[trackingId] = CreateMeshBody(trackingId);
+                _bodyColors[trackingId] = bodyColors[i];
+                meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(meshBodies[trackingId], _bodyColors[trackingId]);
             }
 
             if (remixMode == RemixMode.average || remixMode == RemixMode.exquisite || remixMode == RemixMode.swap)
             {
                 if (!remixerBodies.ContainsKey(trackingId))
                     remixerBodies[trackingId] = CreateRemixerBody(trackingId);
+
+                meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
 
                 //clean up other remixer bodies
                 CleanUpShivaBodies(trackingId);
@@ -382,6 +389,9 @@ public class BodyRemixerController : MonoBehaviour
                 }
 
             }
+            if(remixMode == RemixMode.off)
+            {
+            }
         }
 
 
@@ -399,8 +409,12 @@ public class BodyRemixerController : MonoBehaviour
          * 3. scale to 0 to remove untracked limbs
          * 
          */
-
-        joints = meshJointMap[id];
+        if (meshJointMap[id] != null)
+        {
+            joints = meshJointMap[id];
+        }
+        else
+            Debug.Log(id + " was not present in mesh body joint map dictionary");
 
         Dictionary<string, GameObject> kinectJoints = kinectJointMap[id];
 
@@ -464,6 +478,10 @@ public class BodyRemixerController : MonoBehaviour
                             convertedRotation = kinectTransform.rotation;
                             joints[22].transform.rotation = convertedRotation;
                         }
+                        else if (i == 1) //rotate armature around Y axis only - FOR NOW JUST DON'T ROTATE
+                        {
+                            convertedRotation = Quaternion.Euler(0, 0, 0);
+                        }
                         else
                         {
                             convertedRotation = kinectTransform.rotation;
@@ -479,15 +497,23 @@ public class BodyRemixerController : MonoBehaviour
                     
                     joints[i].transform.rotation = joints[i].transform.parent.transform.rotation;
                 }
-                else //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
+                /*else //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
                 {
 
                     joints[i].transform.rotation = joints[i].transform.GetChild(0).transform.rotation;
-                }
+                }*/
 
                 if (positionJoints || i < 3)
                 {
-                    joints[i].transform.position = kinectTransform.position;
+                    
+                    if (i < 2)
+                    {
+                        joints[i].transform.position = new Vector3(kinectTransform.position.x, 0, kinectTransform.position.z);
+                    }
+                    else
+                    {
+                        joints[i].transform.position = kinectTransform.position;
+                    }
                 }
 
 
