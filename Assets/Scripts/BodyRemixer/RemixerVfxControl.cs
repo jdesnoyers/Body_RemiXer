@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Experimental.VFX;
+using Smrvfx;
 
 public class RemixerVfxControl : MonoBehaviour
 {
@@ -10,28 +11,39 @@ public class RemixerVfxControl : MonoBehaviour
     public VFXbody targetBody;
     public VisualEffect visualFX;
     public float sdfHipOffset = -0.95157192f;
+    [SerializeField] private BodyRemixerController remixer;
     private Vector3 sdfOffsetIntersect;
+    private int numBodies = 0;
     
     // Start is called before the first frame update
     void Awake()
     {
         sdfOffsetIntersect = new Vector3(0.5f, 0.5f, 0.5f);
+        if(remixer==null)
+        {
+            remixer = FindObjectOfType<BodyRemixerController>();
+        }
     }
 
     private void Update()
     {
-        //update VFX transform and SDF converter offset to match the current target's position
-        if(targetBody != null)
+        if(visualFX.enabled)
         {
-            //Vector3 targetPos = targetBody.armatureTransform.position;
-            visualFX.SetVector3("SDF Position", CalculateSdfPostion(targetBody.hipTransform.position));
-            targetBody.meshSDF.offset = CalculateSdfOffset(targetBody.armatureTransform.position);
-        }
-        else //if there is no target body then set the SDF to self
-        {
-            //Vector3 sourcePos = sourceBody.rootTransform.position;
-            visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
-            sourceBody.meshSDF.offset = CalculateSdfOffset(sourceBody.armatureTransform.position);
+            //update VFX transform and SDF converter offset to match the current target's position
+            if (targetBody != null)
+            {
+                //Vector3 targetPos = targetBody.armatureTransform.position;
+                visualFX.SetVector3("SDF Position", CalculateSdfPostion(targetBody.hipTransform.position));
+                targetBody.meshSDF.offset = CalculateSdfOffset(targetBody.armatureTransform.position);
+            }
+            else //if there is no target body then set the SDF to self
+            {
+                //Vector3 sourcePos = sourceBody.rootTransform.position;
+                visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
+                sourceBody.meshSDF.offset = CalculateSdfOffset(sourceBody.armatureTransform.position);
+            }
+
+            UpdateNumBodies(remixer.NumBodies);
         }
 
     }
@@ -82,10 +94,10 @@ public class RemixerVfxControl : MonoBehaviour
     public void SetTarget(GameObject target)
     {
         targetBody = new VFXbody(target);
-        visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
+        visualFX.SetVector3("SDF Position", CalculateSdfPostion(targetBody.hipTransform.position));
 
-        //shut off the local SDF script if we're not using it
-        if (sourceBody.meshSDF.vfxOutput = visualFX)
+        //shut off the local SDF script if we're not using it -- CHECK FOR OFF MODE
+        if (sourceBody.meshSDF.vfxOutput == visualFX)
         {
             sourceBody.meshSDF.vfxOutput = null;
             sourceBody.meshSDF.enabled = false;
@@ -101,6 +113,48 @@ public class RemixerVfxControl : MonoBehaviour
 
     }
 
+    public void DeactivateVFX()
+    {
+        visualFX.enabled = false;
+        sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = false;
+    }
+
+    public void ActivateVFX()
+    {
+        visualFX.enabled = true;
+        sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = true;
+    }
+    public void ResetToSource()
+    {
+        //turn off meshSDF output and disable in target body to make sure our vfx don't get overridden
+        if(targetBody.body != null && targetBody!=null)
+        {
+            targetBody.meshSDF.vfxOutput = null;
+            targetBody.meshSDF.enabled = false;
+
+            //then remove so we know that we don't have a target yet
+        }
+
+        if (targetBody != null)
+        {
+            targetBody = null;
+        }
+
+        //enable source VFX and target at self
+        if (!sourceBody.meshSDF.vfxOutput == visualFX)
+        {
+            sourceBody.meshSDF.vfxOutput = visualFX;
+            sourceBody.meshSDF.enabled = true;
+        }
+
+        //set to self
+        visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
+        visualFX.SetVector4("Target Color", visualFX.GetVector4("Source Color"));
+
+        sourceBody.meshSDF.vfxOutput = visualFX;
+        sourceBody.meshSDF.offset = CalculateSdfOffset(sourceBody.armatureTransform.position);
+    }
+
     public void SetTargetColor(Color color)
     {
         visualFX.SetVector4("Target Color", color);
@@ -109,6 +163,11 @@ public class RemixerVfxControl : MonoBehaviour
     public void AverageModeEnabled(bool mode)
     {
         visualFX.SetBool("Average Mode", mode);
+    }
+
+    public void UpdateNumBodies(int num)
+    {
+        visualFX.SetInt("Tracked Bodies", num);
     }
 
     private Vector3 CalculateSdfOffset(Vector3 pos)

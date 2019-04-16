@@ -17,12 +17,13 @@ public class BodyRemixerController : MonoBehaviour
 {
 
     public RemixMode remixMode = RemixMode.off;
+    private RemixMode oldRemixMode = RemixMode.off;
     public bool thirdPerson = false;
     public bool firstPerson = true;
+    public bool shivaFirstPersonMode = false;
     public bool oldBody = false;
-    public GameObject thirdPersonBody;
     public GameObject BodyPrefab;
-    public GameObject thirdPersonParent;
+    //public GameObject thirdPersonParent; //not used
     public GameObject VrHeadset;
     public float HeadRadius = 0.2f;
 
@@ -33,9 +34,13 @@ public class BodyRemixerController : MonoBehaviour
 
     public BoolEvent thirdPersonToggle;
 
+    public int NumBodies { get; private set; } = 0;
+
+    private GameObject thirdPersonBody;
+
     private bool thirdPersonOld;
 
-    [ColorUsage(true,true)] public Color[] bodyColors = new Color[6];
+    [ColorUsage(true, true)] public Color[] bodyColors = new Color[6];
     private Dictionary<ulong, Color> _bodyColors = new Dictionary<ulong, Color>();
 
     [HideInInspector] public UnityAction ikAction;
@@ -169,9 +174,13 @@ public class BodyRemixerController : MonoBehaviour
         _headRadSq = HeadRadius * HeadRadius; //square radius for later use
 
         bodyTracker.DelegateBodies += UpdateRemixer; //add remixer to delegate function in body tracker
-        
+
         if (thirdPersonToggle == null)
             thirdPersonToggle = new BoolEvent();
+
+        thirdPersonBody = CreateThirdPersonBody();
+        thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(thirdPersonBody, Color.black);
+        thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(true);
 
         //thirdPersonToggle.AddListener(thirdPersonBody.transform.GetChild(0).transform.GetChild(0).gameObject.SetActive);
 
@@ -182,11 +191,11 @@ public class BodyRemixerController : MonoBehaviour
     {
 
         //toggle event for third person view
-        if (thirdPerson != thirdPersonOld)
+        /*if (thirdPerson != thirdPersonOld)
         {
             thirdPersonToggle.Invoke(thirdPerson);
             thirdPersonOld = thirdPerson;
-        }
+        }*/
 
         //toggle event for seeing bodies
 
@@ -215,6 +224,237 @@ public class BodyRemixerController : MonoBehaviour
 
             }
 
+            if (remixMode != oldRemixMode)
+            {
+                switch (remixMode)
+                {
+                    case RemixMode.off:
+                        {
+                            List<ulong> trackIds = bodyTracker.trackedIds;
+                            if (bodyTracker.trackedIds.Count > 1)
+                            {
+                                for (int i = 0; i < trackIds.Count; i += 2)
+                                {
+
+                                    ulong bodyA = trackIds[i];
+                                    ulong bodyB = swapBodies[trackIds[i]];
+                                    if (meshBodies[trackIds[i]] != null)
+                                    {
+                                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[bodyB]);
+                                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[bodyA]);
+                                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                                    }
+                                }
+
+                                //if there is an odd number of bodies, reset the last one to self
+                                if (trackIds.Count % 2 != 0)
+                                {
+                                    meshBodies[trackIds[trackIds.Count - 1]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
+                                }
+                            }
+                            else if (bodyTracker.trackedIds.Count == 1)
+                            {
+                                meshBodies[trackIds[0]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
+                            }
+
+                            foreach (ulong trackingId in bodyTracker.trackedIds)
+                            {
+                                if (oldRemixMode == RemixMode.shiva)
+                                {
+                                    CleanUpShivaBodies(trackingId);
+                                }
+                                else if (oldRemixMode == RemixMode.average)
+                                {
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                                }
+                                else if (oldRemixMode == RemixMode.exquisite)
+                                {
+                                    if (remixerBodies.ContainsKey(trackingId))
+                                    {
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+                                    }
+                                }
+                                if (oldRemixMode == RemixMode.average || oldRemixMode == RemixMode.exquisite || oldRemixMode == RemixMode.swap)
+                                {
+                                    CleanUpRemixerBodies(trackingId);
+                                }
+
+                            }
+
+                            thirdPersonBody.SetActive(false);
+
+                            break;
+                        }
+                    case RemixMode.average:
+                        {
+
+                            //activate the third-person body if it isn't currently
+                            if (!thirdPersonBody.activeSelf)
+                            {
+                                thirdPersonBody.SetActive(true);
+                            }
+
+                            foreach (ulong trackingId in bodyTracker.trackedIds)
+                            {
+                                if (meshBodies[trackingId] != null)
+                                {
+                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
+                                    {
+
+                                        if (remixerBodies[trackingId] != null)
+                                        {
+                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        }
+
+                                        if (oldRemixMode == RemixMode.shiva)
+                                        {
+                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                        }
+                                    }
+
+                                    if (oldRemixMode == RemixMode.exquisite)
+                                    {
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+                                    }
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(true);
+
+                                }
+                            }
+
+
+                            thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.ActivateVFX();
+                            //thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(true); //shouldn't be needed since it should always be in average mode
+
+                            break;
+                        }
+                    case RemixMode.exquisite:
+                        {
+
+                            //activate the third-person body if it isn't currently
+                            if (!thirdPersonBody.activeSelf)
+                            {
+                                thirdPersonBody.SetActive(true);
+                            }
+
+                            foreach (ulong trackingId in bodyTracker.trackedIds)
+                            {
+                                if (meshBodies[trackingId] != null)
+                                {
+                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
+                                    {
+
+                                        if (remixerBodies[trackingId] != null)
+                                        {
+                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        }
+
+                                        if (oldRemixMode == RemixMode.shiva)
+                                        {
+                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                        }
+                                    }
+
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.ActivateVFX();
+                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(thirdPersonBody);
+
+                                }
+
+                            }
+                            thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+
+                            break;
+                        }
+                    case RemixMode.shiva:
+                        {
+                            //deactivate third person body
+                            if (thirdPersonBody.activeSelf)
+                            {
+                                thirdPersonBody.SetActive(false);
+                            }
+
+                            foreach (ulong trackingId in bodyTracker.trackedIds)
+                            {
+                                if (meshBodies[trackingId] != null)
+                                {
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                                }
+
+                                CleanUpRemixerBodies(trackingId);
+                            }
+
+
+                            if (thirdPersonBody.activeSelf)
+                            {
+                                thirdPersonBody.SetActive(false);
+                            }
+
+                            break;
+                        }
+
+                    case RemixMode.swap:
+                        {
+                            foreach (ulong trackingId in bodyTracker.trackedIds)
+                            {
+
+                                if (meshBodies[trackingId] != null)
+                                {
+                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
+                                    {
+
+                                        if (remixerBodies[trackingId] != null)
+                                        {
+                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        }
+
+
+                                        if (oldRemixMode == RemixMode.shiva)
+                                        {
+                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                        }
+                                    }
+
+
+                                    if (oldRemixMode == RemixMode.average)
+                                    {
+                                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                                    }
+                                    else if (oldRemixMode == RemixMode.exquisite)
+                                    {
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+                                    }
+                                }
+                            }
+
+                            if (bodyTracker.trackedIds.Count > 1)
+                            {
+                                List<ulong> trackIds = bodyTracker.trackedIds;
+                                for (int i = 0; i < trackIds.Count; i += 2)
+                                {
+
+                                    ulong bodyA = trackIds[i];
+                                    ulong bodyB = swapBodies[trackIds[i]];
+                                    meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                                    meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                                }
+
+                            }
+
+                            thirdPersonBody.SetActive(false);
+
+                            break;
+
+                        }
+
+                }
+
+                oldRemixMode = remixMode;
+            }
+
+            //update bodies depending on mode
             foreach (ulong trackingId in bodyTracker.trackedIds)
             {
                 RefreshMeshBodyObject(trackingId);
@@ -238,9 +478,13 @@ public class BodyRemixerController : MonoBehaviour
                     case RemixMode.shiva:
                         {
 
-                            foreach (ulong shivaId in bodyTracker.trackedIds)
+                            if (shivaFirstPersonMode)
                             {
-                                UpdateShivaBodies(trackingId, shivaId);
+                                foreach (ulong shivaId in bodyTracker.trackedIds)
+                                {
+                                    UpdateShivaBodies(trackingId, shivaId);
+
+                                }
 
                             }
 
@@ -274,6 +518,9 @@ public class BodyRemixerController : MonoBehaviour
 
         knownMeshIds = new List<ulong>(meshBodies.Keys);
 
+        //update number of bodies for averagers
+        NumBodies = knownMeshIds.Count;
+
         // First delete untracked bodies
         foreach (ulong trackingId in knownMeshIds)
         {
@@ -283,25 +530,36 @@ public class BodyRemixerController : MonoBehaviour
                 meshBodies.Remove(trackingId);
                 meshJointMap.Remove(trackingId);
 
-
                 CleanUpRemixerBodies(trackingId);
 
                 CleanUpShivaBodies(trackingId);
 
-                swapBodies.Remove(swapBodies[trackingId]); //remove connected entry
-                swapBodies.Remove(trackingId);  //remove entry
+                //if there is an entry in the swap bodies dictionary for this ID, clean them up and remove
+                if (swapBodies.ContainsKey(trackingId))
+                {
+                    //if particles are exchanging between individual meshes 
+                    if (remixMode == RemixMode.off)
+                    {
+                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.ResetToSource(); //might be redundant
+                        meshBodies[swapBodies[trackingId]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
 
+                    }
+                    swapBodies.Remove(swapBodies[trackingId]); //remove connected entry
+                    swapBodies.Remove(trackingId);  //remove entry
+
+                }
             }
         }
 
-        if (knownMeshIds.Count == 0)
+        //turn off third person body when there is nobody around
+        if (knownMeshIds.Count == 0 && thirdPersonBody.activeSelf)
         {
-            Destroy(thirdPersonBody);
+            thirdPersonBody.SetActive(false);
         }
 
         //then add newly tracked bodies
         //foreach (ulong trackingId in bodyTracker.trackedIds)
-        for(int i = 0; i < bodyTracker.trackedIds.Count; i++)
+        for (int i = 0; i < bodyTracker.trackedIds.Count; i++)
         {
             ulong trackingId = bodyTracker.trackedIds[i];
             if (!meshBodies.ContainsKey(trackingId))
@@ -314,36 +572,56 @@ public class BodyRemixerController : MonoBehaviour
             if (remixMode == RemixMode.average || remixMode == RemixMode.exquisite || remixMode == RemixMode.swap)
             {
                 if (!remixerBodies.ContainsKey(trackingId))
-                    remixerBodies[trackingId] = CreateRemixerBody(trackingId);
-
-                meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
-
-                //clean up other remixer bodies
-                CleanUpShivaBodies(trackingId);
-
-                if(thirdPersonBody == null)
                 {
-                    thirdPersonBody = CreateThirdPersonBody();
+                    remixerBodies[trackingId] = CreateRemixerBody(trackingId);
+                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(remixerBodies[trackingId], _bodyColors[trackingId]);
+
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+
+                    bool avg = (remixMode == RemixMode.average || remixMode == RemixMode.exquisite);
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(avg);
+
+                    if (avg && !thirdPersonBody.activeSelf)
+                    {
+                        thirdPersonBody.SetActive(true);
+                    }
+
+                    if (remixMode == RemixMode.exquisite)
+                    {
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(thirdPersonBody);
+                    }
+                    else
+                    {
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+                    }
+
                 }
+
+
 
             }
             else if (remixMode == RemixMode.shiva)
             {
                 if (!shivaBodies.ContainsKey(trackingId))
                 {
-                    shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
-
-                    //add dictionary entry for each other new body and sub-dictionary entries for all
-                    foreach (ulong trackId in bodyTracker.trackedIds)
+                    if (shivaFirstPersonMode)
                     {
+                        shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
 
-                        if (!shivaBodies[trackingId].ContainsKey(trackId))
+                        //add dictionary entry for each other new body and sub-dictionary entries for all
+
+                        foreach (ulong trackId in bodyTracker.trackedIds)
                         {
-                            shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
-                        }
-                        if (!shivaBodies[trackId].ContainsKey(trackingId))
-                        {
-                            shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
+
+                            if (!shivaBodies[trackingId].ContainsKey(trackId))
+                            {
+                                shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
+                            }
+                            if (!shivaBodies[trackId].ContainsKey(trackingId))
+                            {
+                                shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
+                            }
+
                         }
 
                     }
@@ -354,47 +632,56 @@ public class BodyRemixerController : MonoBehaviour
                 if (!shivaThirdBodies.ContainsKey(trackingId))
                 {
                     shivaThirdBodies[trackingId] = CreateThirdShiva(trackingId);
+
+                    shivaThirdBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(shivaThirdBodies[trackingId], _bodyColors[trackingId]);
+
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                    shivaThirdBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+
                 }
 
                 //clean up other remixer bodies
-                CleanUpRemixerBodies(trackingId);
-                
-                if(thirdPersonBody != null)
-                {
-                    Destroy(thirdPersonBody);
-                }
 
             }
             else
             {
                 CleanUpRemixerBodies(trackingId);
                 CleanUpShivaBodies(trackingId);
-                Destroy(thirdPersonBody);
+                thirdPersonBody.SetActive(false);
             }
         }
 
         //for direct body swap populate dictionary of pairs when possible
-        if(bodyTracker.trackedIds.Count > 1)
+        if (bodyTracker.trackedIds.Count > 1)
         {
             List<ulong> trackIds = bodyTracker.trackedIds;
             for (int i = 0; i < trackIds.Count; i += 2)
             {
                 if (!swapBodies.ContainsKey(trackIds[i]))
                 {
+                    swapBodies.Add(trackIds[i], trackIds[i + 1]);
+                    swapBodies.Add(trackIds[i + 1], trackIds[i]);
 
+                    ulong bodyA = trackIds[i];
+                    ulong bodyB = swapBodies[trackIds[i]];
+                    if (remixMode == RemixMode.off)
                     {
-                        swapBodies.Add(trackIds[i], trackIds[i + 1]);
-                        swapBodies.Add(trackIds[i + 1], trackIds[i]);
+                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[bodyB]);
+                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[bodyA]);
+                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                    }
+                    else if (remixMode == RemixMode.swap)
+                    {
+                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
                     }
                 }
+            }
 
-            }
-            if(remixMode == RemixMode.off)
-            {
-            }
         }
-
-
 
     }
 
@@ -492,9 +779,9 @@ public class BodyRemixerController : MonoBehaviour
                     joints[i].transform.rotation = convertedRotation;
 
                 }
-                else if(i<23) //if its not the head and we don't hava a roation from the kinect, set it to match its parent's rotation
+                else if (i < 23) //if its not the head and we don't hava a roation from the kinect, set it to match its parent's rotation
                 {
-                    
+
                     joints[i].transform.rotation = joints[i].transform.parent.transform.rotation;
                 }
                 /*else //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
@@ -505,7 +792,7 @@ public class BodyRemixerController : MonoBehaviour
 
                 if (positionJoints || i < 3)
                 {
-                    
+
                     if (i < 2)
                     {
                         joints[i].transform.position = new Vector3(kinectTransform.position.x, 0, kinectTransform.position.z);
@@ -570,6 +857,7 @@ public class BodyRemixerController : MonoBehaviour
 
     }
 
+    //no longer used - third person bodies just deactivated
     private GameObject CreateThirdPersonBody()
     {
         if (BodyPrefab == null)
@@ -665,14 +953,14 @@ public class BodyRemixerController : MonoBehaviour
         for (int i = 0; i < joints.Length; i++)
         {
             Quaternion rotationAverage = Quaternion.identity;
-            Vector4 quaternionCumulator = new Vector4(0,0,0,0);
+            Vector4 quaternionCumulator = new Vector4(0, 0, 0, 0);
             int n = 0;
 
             for (int j = 0; j < knownMeshIds.Count; j++)
             {
                 //Change to compare to previous average to help with stability
                 //average position and rotation for body
-                if(i < 22)
+                if (i < 22)
                 {
                     if (meshJointMap[knownMeshIds[j]][i].transform.localScale != flatScale)
                     {
@@ -718,7 +1006,7 @@ public class BodyRemixerController : MonoBehaviour
                 else
                 {
                     joints[i].transform.localPosition = positionAverager[i] / knownMeshIds.Count;
-                    if(!(float.IsNaN(rotationAverage.w) || float.IsNaN(rotationAverage.x) || float.IsNaN(rotationAverage.y) || float.IsNaN(rotationAverage.z)))
+                    if (!(float.IsNaN(rotationAverage.w) || float.IsNaN(rotationAverage.x) || float.IsNaN(rotationAverage.y) || float.IsNaN(rotationAverage.z)))
                     {
                         joints[i].transform.localRotation = rotationAverage;
                     }
@@ -737,204 +1025,208 @@ public class BodyRemixerController : MonoBehaviour
         for (int i = 0; i < joints.Length; i++)
         {
 
-            //REVISIT - change to control which limbs are controlled by which player to simplify code
-            //change control mapping based on how many players are present
-            switch (knownMeshIds.Count)
-            {
-                case 1:
-                    {
-                        joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                        joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                        joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        break;
-                    }
-                case 2:
-                    {
-                        if (i > 12) //player 1 controls upper body
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else //player 2 controls lower body
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-                case 3:
-                    {
-                        if (i > 17)
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 12)
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else //player 2 controls lower body
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-
-                        break;
-                    }
-                case 4:
-                    {
-                        if (i > 17) //player 1 controls right arm and head
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 2 controls torso and left arm
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 3 controls right leg
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else //player 4 controls left leg and lower torso
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-
-                        break;
-                    }
-                case 5:
-                    {
-                        if (i > 21) //player 1 controls head
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 17) //player 2 controls right arm
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 13) //player 3 controls left arm
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 1 controls torso
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 4 controls right leg
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-                        else if (i > 2) //player 5 controls left leg
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        else //player 1 controls torso
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-                case 6:
-                    {
-                        if (i > 21) //player 1 controls head
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
-                        }
-                        else if (i > 17) //player 2 controls right arm
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
-
-                        }
-                        else if (i > 13) //player 3 controls left arm
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
-
-                        }
-                        else if (i > 10) //player 4 controls torso
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
-
-                        }
-                        else if (i > 6) //player 5 controls right leg
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        else if (i > 2) //player 6 controls left leg
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[5]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[5]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[5]][i].transform.localScale;
-
-                        }
-                        else //player 4 controls torso
-                        {
-                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
-                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
-                            joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
-
-                        }
-                        break;
-                    }
-
-
-            }
-
-            if (i == 0)
+            if (i < 3)
             {
                 joints[i].transform.localPosition = new Vector3(0, joints[i].transform.localPosition.y, 0);
             }
+            else
+            {
+
+                //REVISIT - change to control which limbs are controlled by which player to simplify code
+                //change control mapping based on how many players are present
+                switch (knownMeshIds.Count)
+                {
+                    case 1:
+                        {
+                            joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                            joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                            joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                            break;
+                        }
+                    case 2:
+                        {
+                            if (i > 12) //player 1 controls upper body
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                            }
+                            else //player 2 controls lower body
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                            }
+                            break;
+                        }
+                    case 3:
+                        {
+                            if (i > 17)
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                            }
+                            else if (i > 12)
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                            }
+                            else //player 2 controls lower body
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                            }
+
+                            break;
+                        }
+                    case 4:
+                        {
+                            if (i > 17) //player 1 controls right arm and head
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                            }
+                            else if (i > 10) //player 2 controls torso and left arm
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                            }
+                            else if (i > 6) //player 3 controls right leg
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                            }
+                            else //player 4 controls left leg and lower torso
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                            }
+
+                            break;
+                        }
+                    case 5:
+                        {
+                            if (i > 21) //player 1 controls head
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                            }
+                            else if (i > 17) //player 2 controls right arm
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                            }
+                            else if (i > 13) //player 3 controls left arm
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                            }
+                            else if (i > 10) //player 1 controls torso
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                            }
+                            else if (i > 6) //player 4 controls right leg
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                            }
+                            else if (i > 2) //player 5 controls left leg
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                            }
+                            else //player 1 controls torso
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+
+                            }
+                            break;
+                        }
+                    case 6:
+                        {
+                            if (i > 21) //player 1 controls head
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[0]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[0]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[0]][i].transform.localScale;
+                            }
+                            else if (i > 17) //player 2 controls right arm
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[1]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[1]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[1]][i].transform.localScale;
+
+                            }
+                            else if (i > 13) //player 3 controls left arm
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[2]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[2]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[2]][i].transform.localScale;
+
+                            }
+                            else if (i > 10) //player 4 controls torso
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[3]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[3]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[3]][i].transform.localScale;
+
+                            }
+                            else if (i > 6) //player 5 controls right leg
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                            }
+                            else if (i > 2) //player 6 controls left leg
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[5]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[5]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[5]][i].transform.localScale;
+
+                            }
+                            else //player 4 controls torso
+                            {
+                                joints[i].transform.localPosition = meshJointMap[knownMeshIds[4]][i].transform.localPosition;
+                                joints[i].transform.localRotation = meshJointMap[knownMeshIds[4]][i].transform.localRotation;
+                                joints[i].transform.localScale = meshJointMap[knownMeshIds[4]][i].transform.localScale;
+
+                            }
+                            break;
+                        }
+
+
+                }
+            }
+
 
         }
     }
@@ -1072,46 +1364,50 @@ public class BodyRemixerController : MonoBehaviour
     private void CleanUpShivaBodies(ulong id)
     {
 
-        if (shivaBodies.ContainsKey(id))
+        if (shivaFirstPersonMode)
         {
-            foreach (ulong trackId in knownMeshIds)
-            {
-                if (shivaBodies.ContainsKey(trackId))
-                {
-                    if (shivaBodies[trackId].ContainsKey(id))
-                    {
-                        Destroy(shivaBodies[trackId][id]); //destroy each instance of the untracked Shiva body from other tracked bodies
-
-                        shivaBodies[trackId].Remove(id);   //remove each instance of untracked Shiva body from sub-dictionaries
-                    }
-                }
-
-                if (shivaBodies[id].ContainsKey(trackId))
-                {
-                    Destroy(shivaBodies[id][trackId]); //destroy all Shiva bodies from untracked body
-                }
-
-            }
-
-            shivaBodies.Remove(id); //remove untracked shiva body from dictionary
-
-            if (shivaJointMap.ContainsKey(id))
+            if (shivaBodies.ContainsKey(id))
             {
                 foreach (ulong trackId in knownMeshIds)
                 {
-                    if(shivaJointMap.ContainsKey(trackId))
+                    if (shivaBodies.ContainsKey(trackId))
                     {
-                        if (shivaJointMap[trackId].ContainsKey(id))
+                        if (shivaBodies[trackId].ContainsKey(id))
                         {
-                            shivaJointMap[trackId].Remove(id);
+                            Destroy(shivaBodies[trackId][id]); //destroy each instance of the untracked Shiva body from other tracked bodies
+
+                            shivaBodies[trackId].Remove(id);   //remove each instance of untracked Shiva body from sub-dictionaries
                         }
                     }
-                     
-                }
-                shivaJointMap.Remove(id);
-            }
 
+                    if (shivaBodies[id].ContainsKey(trackId))
+                    {
+                        Destroy(shivaBodies[id][trackId]); //destroy all Shiva bodies from untracked body
+                    }
+
+                }
+
+                shivaBodies.Remove(id); //remove untracked shiva body from dictionary
+
+                if (shivaJointMap.ContainsKey(id))
+                {
+                    foreach (ulong trackId in knownMeshIds)
+                    {
+                        if (shivaJointMap.ContainsKey(trackId))
+                        {
+                            if (shivaJointMap[trackId].ContainsKey(id))
+                            {
+                                shivaJointMap[trackId].Remove(id);
+                            }
+                        }
+
+                    }
+                    shivaJointMap.Remove(id);
+                }
+
+            }
         }
+
 
         if (shivaThirdBodies.ContainsKey(id))
         {

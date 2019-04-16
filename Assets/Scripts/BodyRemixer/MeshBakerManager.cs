@@ -57,10 +57,4 @@ public class MeshBakerManager : MonoBehaviour
         normalMap = baker.NormalMap;
         
     }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }
