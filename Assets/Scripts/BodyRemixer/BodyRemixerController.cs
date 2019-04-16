@@ -35,7 +35,7 @@ public class BodyRemixerController : MonoBehaviour
     public BoolEvent thirdPersonToggle;
 
     public int NumBodies { get; private set; } = 0;
-
+    
     private GameObject thirdPersonBody;
 
     private bool thirdPersonOld;
@@ -494,7 +494,7 @@ public class BodyRemixerController : MonoBehaviour
                         }
                     case RemixMode.swap:
                         {
-                            if (swapBodies.ContainsKey(trackingId))
+                            if (swapBodies.ContainsKey(trackingId) && meshJointMap.ContainsKey(swapBodies[trackingId]))
                             {
                                 UpdateSwapBodies(trackingId, swapBodies[trackingId]);
                             }
@@ -519,20 +519,13 @@ public class BodyRemixerController : MonoBehaviour
         knownMeshIds = new List<ulong>(meshBodies.Keys);
 
         //update number of bodies for averagers
-        NumBodies = knownMeshIds.Count;
+        NumBodies = bodyTracker.trackedIds.Count;
 
         // First delete untracked bodies
         foreach (ulong trackingId in knownMeshIds)
         {
             if (!bodyTracker.trackedIds.Contains(trackingId))
             {
-                Destroy(meshBodies[trackingId]);
-                meshBodies.Remove(trackingId);
-                meshJointMap.Remove(trackingId);
-
-                CleanUpRemixerBodies(trackingId);
-
-                CleanUpShivaBodies(trackingId);
 
                 //if there is an entry in the swap bodies dictionary for this ID, clean them up and remove
                 if (swapBodies.ContainsKey(trackingId))
@@ -548,11 +541,31 @@ public class BodyRemixerController : MonoBehaviour
                     swapBodies.Remove(trackingId);  //remove entry
 
                 }
+
+                //make sure that the last mesh gets reset - MIGHT BE ABLE TO REMOVE***
+                if (NumBodies == 1)
+                {
+                    meshBodies[knownMeshIds[0]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
+                }
+
+                Destroy(meshBodies[trackingId]);
+                meshBodies.Remove(trackingId);
+                meshJointMap.Remove(trackingId);
+
+
+                _bodyColors.Remove(trackingId);
+
+                CleanUpRemixerBodies(trackingId);
+
+                CleanUpShivaBodies(trackingId);
+
             }
         }
 
+        knownMeshIds = new List<ulong>(bodyTracker.trackedIds);
+
         //turn off third person body when there is nobody around
-        if (knownMeshIds.Count == 0 && thirdPersonBody.activeSelf)
+        if (bodyTracker.trackedIds.Count == 0 && thirdPersonBody.activeSelf)
         {
             thirdPersonBody.SetActive(false);
         }
@@ -565,7 +578,7 @@ public class BodyRemixerController : MonoBehaviour
             if (!meshBodies.ContainsKey(trackingId))
             {
                 meshBodies[trackingId] = CreateMeshBody(trackingId);
-                _bodyColors[trackingId] = bodyColors[i];
+                _bodyColors.Add(trackingId,bodyColors[i]);
                 meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(meshBodies[trackingId], _bodyColors[trackingId]);
             }
 

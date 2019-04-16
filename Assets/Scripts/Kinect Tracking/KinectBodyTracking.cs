@@ -60,7 +60,6 @@ public class KinectBodyTracking : MonoBehaviour
     private Quaternion zeroQuaternion = new Quaternion(0, 0, 0, 0);
 
     public List<ulong> trackedIds { get; private set; } = new List<ulong>();
-    private List<ulong> knownMeshIds = new List<ulong>();
     private List<ulong> knownIds = new List<ulong>();
 
     private Kinect.CameraSpacePoint[] filteredJoints;
