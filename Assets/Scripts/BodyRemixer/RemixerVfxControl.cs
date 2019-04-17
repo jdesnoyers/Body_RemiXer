@@ -127,17 +127,17 @@ public class RemixerVfxControl : MonoBehaviour
     public void ResetToSource()
     {
         //turn off meshSDF output and disable in target body to make sure our vfx don't get overridden
-        if(targetBody.body != null && targetBody != null)
+        if(targetBody != null)
         {
-            targetBody.meshSDF.vfxOutput = null;
-            targetBody.meshSDF.enabled = false;
+            if (targetBody.body != null)
+            {
+                targetBody.meshSDF.vfxOutput = null;
+                targetBody.meshSDF.enabled = false;
 
-            //then remove so we know that we don't have a target yet
-        }
-
-        if (targetBody != null)
-        {
+                //then remove so we know that we don't have a target yet
+            }
             targetBody = null;
+
         }
 
         //enable source VFX and target at self
