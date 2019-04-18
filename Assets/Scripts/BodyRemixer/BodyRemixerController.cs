@@ -8,18 +8,12 @@ using UnityEngine.Events;
 
 public enum RemixMode { off, average, exquisite, shiva, swap };
 
-[System.Serializable]
-public class BoolEvent : UnityEvent<bool>
-{
-}
 
 public class BodyRemixerController : MonoBehaviour
 {
 
     public RemixMode remixMode = RemixMode.off;
     private RemixMode oldRemixMode = RemixMode.off;
-    public bool thirdPerson = false;
-    public bool firstPerson = true;
     public bool shivaFirstPersonMode = false;
     public bool oldBody = false;
     public GameObject BodyPrefab;
@@ -31,11 +25,9 @@ public class BodyRemixerController : MonoBehaviour
 
     public bool positionJoints = true;
     public bool scaleJoints = true;
-
-    public BoolEvent thirdPersonToggle;
-
-    public int NumBodies { get; private set; } = 0;
     
+    public int NumBodies { get; private set; } = 0;
+
     private GameObject thirdPersonBody;
 
     private bool thirdPersonOld;
@@ -175,8 +167,6 @@ public class BodyRemixerController : MonoBehaviour
 
         bodyTracker.DelegateBodies += UpdateRemixer; //add remixer to delegate function in body tracker
 
-        if (thirdPersonToggle == null)
-            thirdPersonToggle = new BoolEvent();
 
         thirdPersonBody = CreateThirdPersonBody();
         thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(thirdPersonBody, Color.black);
@@ -268,17 +258,14 @@ public class BodyRemixerController : MonoBehaviour
                                 {
                                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
                                 }
-                                else if (oldRemixMode == RemixMode.exquisite)
+                                /*else if (oldRemixMode == RemixMode.exquisite)
                                 {
                                     if (remixerBodies.ContainsKey(trackingId))
                                     {
                                         remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
                                     }
-                                }
-                                if (oldRemixMode == RemixMode.average || oldRemixMode == RemixMode.exquisite || oldRemixMode == RemixMode.swap)
-                                {
-                                    CleanUpRemixerBodies(trackingId);
-                                }
+                                }*/
+                                CleanUpRemixerBodies(trackingId);
 
                             }
 
@@ -297,26 +284,23 @@ public class BodyRemixerController : MonoBehaviour
 
                             foreach (ulong trackingId in bodyTracker.trackedIds)
                             {
-                                if (meshBodies[trackingId] != null)
+                                if (meshBodies.ContainsKey(trackingId))
                                 {
-                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
+                                    if (remixerBodies.ContainsKey(trackingId))
                                     {
-
-                                        if (remixerBodies[trackingId] != null)
-                                        {
-                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
-                                        }
-
-                                        if (oldRemixMode == RemixMode.shiva)
-                                        {
-                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
-                                        }
+                                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
                                     }
 
-                                    if (oldRemixMode == RemixMode.exquisite)
+                                    if (oldRemixMode == RemixMode.shiva)
+                                    {
+                                        CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                    }
+                                    /*else if (oldRemixMode == RemixMode.exquisite)
                                     {
                                         remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
-                                    }
+                                    }*/
                                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(true);
 
                                 }
@@ -339,25 +323,25 @@ public class BodyRemixerController : MonoBehaviour
 
                             foreach (ulong trackingId in bodyTracker.trackedIds)
                             {
-                                if (meshBodies[trackingId] != null)
+                                if (meshBodies.ContainsKey(trackingId))
                                 {
-                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
+
+                                    if (remixerBodies.ContainsKey(trackingId))
                                     {
-
-                                        if (remixerBodies[trackingId] != null)
-                                        {
-                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
-                                        }
-
-                                        if (oldRemixMode == RemixMode.shiva)
-                                        {
-                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
-                                        }
+                                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DisableLocalSDF();
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(thirdPersonBody);
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
                                     }
 
+                                    if (oldRemixMode == RemixMode.shiva)
+                                    {
+                                        CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                    }
+
+
                                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
-                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.ActivateVFX();
-                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(thirdPersonBody);
+                                    //remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.ActivateVFX();
 
                                 }
 
@@ -376,16 +360,18 @@ public class BodyRemixerController : MonoBehaviour
 
                             foreach (ulong trackingId in bodyTracker.trackedIds)
                             {
-                                if (meshBodies[trackingId] != null)
+                                if (meshBodies.ContainsKey(trackingId) && shivaThirdBodies.ContainsKey(trackingId))
                                 {
-                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
                                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+                                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DisableLocalSDF();
                                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
+                                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
                                 }
 
-                                CleanUpRemixerBodies(trackingId);
+                                //CleanUpRemixerBodies(trackingId);
                             }
-
 
                             if (thirdPersonBody.activeSelf)
                             {
@@ -400,14 +386,14 @@ public class BodyRemixerController : MonoBehaviour
                             foreach (ulong trackingId in bodyTracker.trackedIds)
                             {
 
-                                if (meshBodies[trackingId] != null)
+                                if (meshBodies.ContainsKey(trackingId))
                                 {
-                                    if (oldRemixMode == RemixMode.off || oldRemixMode == RemixMode.shiva)
-                                    {
+                                    
 
-                                        if (remixerBodies[trackingId] != null)
+                                        if (remixerBodies.ContainsKey(trackingId))
                                         {
                                             meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                            remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
                                         }
 
 
@@ -415,30 +401,34 @@ public class BodyRemixerController : MonoBehaviour
                                         {
                                             CleanUpShivaBodies(trackingId);//clean up other remixer bodies
                                         }
-                                    }
 
 
                                     if (oldRemixMode == RemixMode.average)
                                     {
                                         meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
                                     }
-                                    else if (oldRemixMode == RemixMode.exquisite)
+                                    /*else if (oldRemixMode == RemixMode.exquisite)
                                     {
                                         remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
-                                    }
+                                    }*/
                                 }
                             }
 
+                            //if there's more than one tracked body, set target colors to paired body
                             if (bodyTracker.trackedIds.Count > 1)
                             {
                                 List<ulong> trackIds = bodyTracker.trackedIds;
-                                for (int i = 0; i < trackIds.Count; i += 2)
+                                for (int i = 1; i < trackIds.Count; i += 2)
                                 {
-
-                                    ulong bodyA = trackIds[i];
-                                    ulong bodyB = swapBodies[trackIds[i]];
-                                    meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
-                                    meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                                    if (swapBodies.ContainsKey(trackIds[i]))
+                                    {
+                                        ulong bodyA = trackIds[i];
+                                        ulong bodyB = swapBodies[trackIds[i]];
+                                        meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                                        meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                                        remixerBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                                        remixerBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+                                    }
                                 }
 
                             }
@@ -488,6 +478,7 @@ public class BodyRemixerController : MonoBehaviour
 
                             }
 
+                            UpdateRemixBodies(trackingId);
                             UpdateShivaThird(trackingId);
 
                             break;
@@ -500,7 +491,11 @@ public class BodyRemixerController : MonoBehaviour
                             }
                             else
                             {
-                                UpdateSwapBodies(trackingId, trackingId);
+                                if(remixerBodies.ContainsKey(trackingId) && meshBodies.ContainsKey(trackingId))
+                                {
+                                    UpdateSwapBodies(trackingId, trackingId);
+
+                                }
                             }
                             break;
                         }
@@ -543,10 +538,10 @@ public class BodyRemixerController : MonoBehaviour
                 }
 
                 //make sure that the last mesh gets reset - MIGHT BE ABLE TO REMOVE***
-                if (NumBodies == 1)
-                {
-                    meshBodies[knownMeshIds[0]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
-                }
+                //if (NumBodies == 1)
+                //{
+                //    meshBodies[knownMeshIds[0]].GetComponent<MeshBakerManager>().vfxControl.ResetToSource();
+                //}
 
                 Destroy(meshBodies[trackingId]);
                 meshBodies.Remove(trackingId);
@@ -578,85 +573,104 @@ public class BodyRemixerController : MonoBehaviour
             if (!meshBodies.ContainsKey(trackingId))
             {
                 meshBodies[trackingId] = CreateMeshBody(trackingId);
-                _bodyColors.Add(trackingId,bodyColors[i]);
+                _bodyColors.Add(trackingId, bodyColors[i]);
                 meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(meshBodies[trackingId], _bodyColors[trackingId]);
             }
 
-            if (remixMode == RemixMode.average || remixMode == RemixMode.exquisite || remixMode == RemixMode.swap)
+            if (remixMode != RemixMode.off)
             {
                 if (!remixerBodies.ContainsKey(trackingId))
                 {
+                    //set up the remixer body and initialize the VFX for that body
                     remixerBodies[trackingId] = CreateRemixerBody(trackingId);
                     remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(remixerBodies[trackingId], _bodyColors[trackingId]);
 
+                    //set the target of the mesh body to the remixer body
                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
 
-                    bool avg = (remixMode == RemixMode.average || remixMode == RemixMode.exquisite);
-                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(avg);
-
-                    if (avg && !thirdPersonBody.activeSelf)
+                    //activate the "Third Person Body" in average and exquisite corpse modes
+                    if ((remixMode == RemixMode.average || remixMode == RemixMode.exquisite) && !thirdPersonBody.activeSelf)
                     {
                         thirdPersonBody.SetActive(true);
                     }
 
-                    if (remixMode == RemixMode.exquisite)
+                    if (remixMode == RemixMode.average)
                     {
+                        //turn on average color mode and set target of remixer body to the mesh body (reciprocal of the other VFX system)
+                        thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.ActivateVFX();
+                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(true);
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+                    }
+                    else if (remixMode == RemixMode.exquisite)
+                    {
+                        //set target of remixer body to the third person body
+                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DisableLocalSDF();
+                        thirdPersonBody.GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
                         remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(thirdPersonBody);
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
                     }
-                    else
+                    else if (remixMode == RemixMode.swap)
                     {
-                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
+                        //set target of remixer body to the mesh body (reciprocal of the other VFX system)
+                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
                     }
-
-                }
-
-
-
-            }
-            else if (remixMode == RemixMode.shiva)
-            {
-                if (!shivaBodies.ContainsKey(trackingId))
-                {
-                    if (shivaFirstPersonMode)
+                    else if (remixMode == RemixMode.shiva)
                     {
-                        shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
-
-                        //add dictionary entry for each other new body and sub-dictionary entries for all
-
-                        foreach (ulong trackId in bodyTracker.trackedIds)
+                        if (shivaFirstPersonMode)
                         {
-
-                            if (!shivaBodies[trackingId].ContainsKey(trackId))
+                            if (!shivaBodies.ContainsKey(trackingId))
                             {
-                                shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
-                            }
-                            if (!shivaBodies[trackId].ContainsKey(trackingId))
-                            {
-                                shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
-                            }
+                                shivaBodies.Add(trackingId, new Dictionary<ulong, GameObject>());
 
+                                //add dictionary entry for each other new body and sub-dictionary entries for all
+
+                                foreach (ulong trackId in bodyTracker.trackedIds)
+                                {
+
+                                    if (!shivaBodies[trackingId].ContainsKey(trackId))
+                                    {
+                                        shivaBodies[trackingId].Add(trackId, CreateShivaBody(trackingId, trackId));
+                                    }
+                                    if (!shivaBodies[trackId].ContainsKey(trackingId))
+                                    {
+                                        shivaBodies[trackId].Add(trackingId, CreateShivaBody(trackId, trackingId));
+                                    }
+
+                                }
+
+                            }
                         }
 
+
+                        //add dictionary for this new tracked body
+
+                        
+
+                        //clean up other remixer bodies
+
                     }
+
                 }
 
-                //add dictionary for this new tracked body
-
-                if (!shivaThirdBodies.ContainsKey(trackingId))
+                if (!shivaThirdBodies.ContainsKey(trackingId) && remixMode == RemixMode.shiva)
                 {
+                    //set up the Shiva third person body and initialize the VFX
                     shivaThirdBodies[trackingId] = CreateThirdShiva(trackingId);
-
                     shivaThirdBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(shivaThirdBodies[trackingId], _bodyColors[trackingId]);
 
-                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+                    meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DisableLocalSDF();
                     meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
+
+                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(shivaThirdBodies[trackingId]);
+                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[trackingId]);
+
+                    remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.AverageModeEnabled(false);
                     shivaThirdBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.DeactivateVFX();
 
                 }
-
-                //clean up other remixer bodies
-
             }
             else
             {
@@ -664,18 +678,19 @@ public class BodyRemixerController : MonoBehaviour
                 CleanUpShivaBodies(trackingId);
                 thirdPersonBody.SetActive(false);
             }
+
         }
 
         //for direct body swap populate dictionary of pairs when possible
         if (bodyTracker.trackedIds.Count > 1)
         {
             List<ulong> trackIds = bodyTracker.trackedIds;
-            for (int i = 0; i < trackIds.Count; i += 2)
+            for (int i = 1; i < trackIds.Count; i += 2)
             {
                 if (!swapBodies.ContainsKey(trackIds[i]))
                 {
-                    swapBodies.Add(trackIds[i], trackIds[i + 1]);
-                    swapBodies.Add(trackIds[i + 1], trackIds[i]);
+                    swapBodies.Add(trackIds[i], trackIds[i - 1]);
+                    swapBodies.Add(trackIds[i - 1], trackIds[i]);
 
                     ulong bodyA = trackIds[i];
                     ulong bodyB = swapBodies[trackIds[i]];
@@ -690,6 +705,9 @@ public class BodyRemixerController : MonoBehaviour
                     {
                         meshBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
                         meshBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                        remixerBodies[bodyA].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyA]);
+                        remixerBodies[bodyB].GetComponent<MeshBakerManager>().vfxControl.SetTargetColor(_bodyColors[bodyB]);
+
                     }
                 }
             }
@@ -709,7 +727,7 @@ public class BodyRemixerController : MonoBehaviour
          * 3. scale to 0 to remove untracked limbs
          * 
          */
-        if (meshJointMap[id] != null)
+        if (meshJointMap.ContainsKey(id))
         {
             joints = meshJointMap[id];
         }
@@ -770,13 +788,12 @@ public class BodyRemixerController : MonoBehaviour
                         }
                         else if (i == 22)
                         {
-
+                            convertedRotation = kinectJoints["mixamorig_Head"].transform.rotation;
                         }
                         else if (i == 23)
                         {
                             //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
-                            convertedRotation = kinectTransform.rotation;
-                            joints[22].transform.rotation = convertedRotation;
+                            convertedRotation = Quaternion.identity;
                         }
                         else if (i == 1) //rotate armature around Y axis only - FOR NOW JUST DON'T ROTATE
                         {
@@ -839,13 +856,17 @@ public class BodyRemixerController : MonoBehaviour
             else if (i > 21) //if its the head or neck
             {
                 //check if its close to the headset, hide if its too close to prevent effects from covering face
-                if (Vector3.SqrMagnitude(joints[23].transform.position - VrHeadset.transform.position) < _headRadSq)
+                if(VrHeadset!=null)
                 {
-                    joints[i].transform.localScale = Vector3.forward;
-                }
-                else
-                {
-                    joints[i].transform.localScale = Vector3.one;
+                    if (Vector3.SqrMagnitude(joints[23].transform.position - VrHeadset.transform.position) < _headRadSq)
+                    {
+                        joints[i].transform.localScale = Vector3.forward;
+                    }
+                    else
+                    {
+                        joints[i].transform.localScale = Vector3.one;
+
+                    }
 
                 }
             }

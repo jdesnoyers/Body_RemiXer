@@ -112,6 +112,11 @@ public class RemixerVfxControl : MonoBehaviour
         targetBody.meshSDF.offset = CalculateSdfOffset(targetBody.armatureTransform.position);
 
     }
+    public void DisableLocalSDF()
+    {
+        sourceBody.meshSDF.enabled = false;
+    }
+
 
     public void DeactivateVFX()
     {
@@ -127,18 +132,19 @@ public class RemixerVfxControl : MonoBehaviour
     public void ResetToSource()
     {
         //turn off meshSDF output and disable in target body to make sure our vfx don't get overridden
-        if(targetBody != null)
-        {
-            if (targetBody.body != null)
-            {
-                targetBody.meshSDF.vfxOutput = null;
-                targetBody.meshSDF.enabled = false;
+        //if(targetBody != null)
+        //{
+        //    if (targetBody.body != null)
+        //    {
+        //        targetBody.meshSDF.vfxOutput = null;
+        //        targetBody.meshSDF.enabled = false;
 
-                //then remove so we know that we don't have a target yet
-            }
-            targetBody = null;
+                
+        //    }
 
-        }
+        //}
+
+        targetBody = null; //then remove so we know that we don't have a target yet
 
         //enable source VFX and target at self
         if (sourceBody.meshSDF.vfxOutput != visualFX)
