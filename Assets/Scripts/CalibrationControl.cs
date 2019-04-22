@@ -20,7 +20,7 @@ public class CalibrationControl : MonoBehaviour {
 
     public KinectBodyTracking bodyTracker;
 
-    public TextMeshPro frameRateDisplay;    //displays frame rate while adjusting calibration
+    public TextMeshProUGUI frameRateDisplay;    //displays frame rate while adjusting calibration
 
     private bool unlocked = false;  //boolean to unlock the adjustment with a specific set of keys
 
