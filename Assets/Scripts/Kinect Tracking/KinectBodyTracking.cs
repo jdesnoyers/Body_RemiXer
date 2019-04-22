@@ -130,7 +130,7 @@ public class KinectBodyTracking : MonoBehaviour
         { Kinect.JointType.ShoulderRight, Kinect.JointType.ElbowRight },
 
 
-        //{ Kinect.JointType.Neck, Kinect.JointType.Head },
+        { Kinect.JointType.Neck, Kinect.JointType.Head },
         { Kinect.JointType.SpineShoulder, Kinect.JointType.Neck},
         { Kinect.JointType.SpineMid, Kinect.JointType.SpineShoulder },
         { Kinect.JointType.SpineBase, Kinect.JointType.SpineMid },
@@ -383,8 +383,7 @@ public class KinectBodyTracking : MonoBehaviour
                         orientJoints[jt] = Quaternion.identity;
                     }
                 }
-                //else 
-                if (jt == Kinect.JointType.ThumbLeft || jt == Kinect.JointType.ThumbRight) //the thumbs are along their parents forward vector so they are calculated
+                else if (jt == Kinect.JointType.ThumbLeft || jt == Kinect.JointType.ThumbRight) //the thumbs are along their parents forward vector so they are calculated
                 {
 
                     Vector3 perpendicular = Vector3.Cross(direction, Vector3.up);
@@ -400,6 +399,13 @@ public class KinectBodyTracking : MonoBehaviour
                         orientJoints[jt] = Quaternion.identity;
                     }
 
+                }
+                else if (jt == Kinect.JointType.Neck) //rotate the neck from side to side while keeping the Z axis pointing forwards
+                {
+                    Vector3 forward = orientJoints[_BoneMap[jt]] * Vector3.forward;
+                    Vector3 childFilteredJointPos = GetVector3FromCameraSpacePoint(filteredJoints[(int)_JointChildMap[jt]]);
+                    Vector3 y = childFilteredJointPos - filteredJointPos;
+                    orientJoints[jt] = Quaternion.LookRotation(forward, y);
                 }
                 else //by default set the up axis to point away from the joint and forward axis towards the parent's forward axis
                 {

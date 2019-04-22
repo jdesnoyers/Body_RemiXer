@@ -83,6 +83,7 @@ public class RemixerVfxControl : MonoBehaviour
 
         visualFX.SetTexture("Source Position", sourceBody.positionMap);
         visualFX.SetTexture("Source Velocity", sourceBody.velocityMap);
+        visualFX.SetTexture("Target Position", sourceBody.positionMap);
         visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
         visualFX.SetVector4("Source Color", color);
         visualFX.SetVector4("Target Color", color);
@@ -95,6 +96,7 @@ public class RemixerVfxControl : MonoBehaviour
     {
         targetBody = new VFXbody(target);
         visualFX.SetVector3("SDF Position", CalculateSdfPostion(targetBody.hipTransform.position));
+        visualFX.SetTexture("Target Position", targetBody.positionMap);
 
         //shut off the local SDF script if we're not using it -- CHECK FOR OFF MODE
         if (sourceBody.meshSDF.vfxOutput == visualFX)
@@ -121,13 +123,13 @@ public class RemixerVfxControl : MonoBehaviour
     public void DeactivateVFX()
     {
         visualFX.enabled = false;
-        sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = false;
+        //sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = false;
     }
 
     public void ActivateVFX()
     {
         visualFX.enabled = true;
-        sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = true;
+        //sourceBody.body.GetComponent<SkinnedMeshBaker>().enabled = true;
     }
     public void ResetToSource()
     {
@@ -156,6 +158,7 @@ public class RemixerVfxControl : MonoBehaviour
         //set to self
         visualFX.SetVector3("SDF Position", CalculateSdfPostion(sourceBody.hipTransform.position));
         visualFX.SetVector4("Target Color", visualFX.GetVector4("Source Color"));
+        visualFX.SetTexture("Target Position", sourceBody.positionMap);
 
         sourceBody.meshSDF.vfxOutput = visualFX;
         sourceBody.meshSDF.offset = CalculateSdfOffset(sourceBody.armatureTransform.position);

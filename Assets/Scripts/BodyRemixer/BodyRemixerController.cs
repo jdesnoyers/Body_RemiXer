@@ -25,7 +25,7 @@ public class BodyRemixerController : MonoBehaviour
 
     public bool positionJoints = true;
     public bool scaleJoints = true;
-    
+
     public int NumBodies { get; private set; } = 0;
 
     private GameObject thirdPersonBody;
@@ -388,19 +388,19 @@ public class BodyRemixerController : MonoBehaviour
 
                                 if (meshBodies.ContainsKey(trackingId))
                                 {
-                                    
-
-                                        if (remixerBodies.ContainsKey(trackingId))
-                                        {
-                                            meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
-                                            remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
-                                        }
 
 
-                                        if (oldRemixMode == RemixMode.shiva)
-                                        {
-                                            CleanUpShivaBodies(trackingId);//clean up other remixer bodies
-                                        }
+                                    if (remixerBodies.ContainsKey(trackingId))
+                                    {
+                                        meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(remixerBodies[trackingId]);
+                                        remixerBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.SetTarget(meshBodies[trackingId]);
+                                    }
+
+
+                                    if (oldRemixMode == RemixMode.shiva)
+                                    {
+                                        CleanUpShivaBodies(trackingId);//clean up other remixer bodies
+                                    }
 
 
                                     if (oldRemixMode == RemixMode.average)
@@ -478,7 +478,7 @@ public class BodyRemixerController : MonoBehaviour
 
                             }
 
-                            UpdateRemixBodies(trackingId);
+                            UpdateRemixBodiesFromSelf(trackingId);
                             UpdateShivaThird(trackingId);
 
                             break;
@@ -491,7 +491,7 @@ public class BodyRemixerController : MonoBehaviour
                             }
                             else
                             {
-                                if(remixerBodies.ContainsKey(trackingId) && meshBodies.ContainsKey(trackingId))
+                                if (remixerBodies.ContainsKey(trackingId) && meshBodies.ContainsKey(trackingId))
                                 {
                                     UpdateSwapBodies(trackingId, trackingId);
 
@@ -573,7 +573,7 @@ public class BodyRemixerController : MonoBehaviour
             if (!meshBodies.ContainsKey(trackingId))
             {
                 meshBodies[trackingId] = CreateMeshBody(trackingId);
-                _bodyColors.Add(trackingId, bodyColors[i]);
+                _bodyColors.Add(trackingId, bodyColors[i]);  //first color gets assigned twice on first entry of second body
                 meshBodies[trackingId].GetComponent<MeshBakerManager>().vfxControl.IntializeVFX(meshBodies[trackingId], _bodyColors[trackingId]);
             }
 
@@ -646,7 +646,7 @@ public class BodyRemixerController : MonoBehaviour
 
                         //add dictionary for this new tracked body
 
-                        
+
 
                         //clean up other remixer bodies
 
@@ -786,15 +786,16 @@ public class BodyRemixerController : MonoBehaviour
                         {
                             convertedRotation = Quaternion.AngleAxis(-90, kinectTransform.up) * kinectTransform.rotation;
                         }
-                        else if (i == 22)
+                        /*else if (i == 22)
                         {
                             convertedRotation = kinectJoints["mixamorig_Head"].transform.rotation;
-                        }
-                        else if (i == 23)
+                        }*/
+                        /*else if (i == 23)
                         {
                             //FIX LATER: temporary fix for the neck use the head transform? -- need to fix as there is some mismatch between the kinect and mesh joints
-                            convertedRotation = Quaternion.identity;
-                        }
+                            //convertedRotation = Quaternion.identity;
+                            convertedRotation = kinectTransform.rotation;
+                        }*/
                         else if (i == 1) //rotate armature around Y axis only - FOR NOW JUST DON'T ROTATE
                         {
                             convertedRotation = Quaternion.Euler(0, 0, 0);
@@ -856,7 +857,7 @@ public class BodyRemixerController : MonoBehaviour
             else if (i > 21) //if its the head or neck
             {
                 //check if its close to the headset, hide if its too close to prevent effects from covering face
-                if(VrHeadset!=null)
+                if (VrHeadset != null)
                 {
                     if (Vector3.SqrMagnitude(joints[23].transform.position - VrHeadset.transform.position) < _headRadSq)
                     {
@@ -1284,6 +1285,21 @@ public class BodyRemixerController : MonoBehaviour
                 joints[i].transform.localRotation = _thirdPersonJointMap[i].transform.localRotation;
 
             }
+
+        }
+
+    }
+
+    void UpdateRemixBodiesFromSelf(ulong id)
+    {
+        GameObject[] remixerJoints = remixerJointMap[id];
+        GameObject[] meshJoints = meshJointMap[id];
+
+        for (int i = 0; i < joints.Length; i++)
+        {
+            remixerJoints[i].transform.localScale = meshJoints[i].transform.localScale;
+            remixerJoints[i].transform.localPosition = meshJoints[i].transform.localPosition;
+            remixerJoints[i].transform.localRotation = meshJoints[i].transform.localRotation;
 
         }
 
